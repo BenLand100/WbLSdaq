@@ -1,0 +1,12 @@
+WbLSdaq is a readout program for CANE VME hardware used in the WbLS R&D effort
+at UC Berkeley / Lawrence Berkeley National Lab. This interacts at the lowest
+level with V1730 and V1742 digitizers and V65xx high voltage supplies via a 
+V1718 USB<>VME bridge. All settings are stored in json-esque documents and 
+loaded at runtime. Results are stored in structured HDF5 files along with any
+attributes that may be relevant to the datataking process. 
+
+WbLSdaq depends on CAEN's VME library and the HDF5 library.
+
+To build, execute the script ./build.sh in the top directory
+
+To use, ./WbLSdaq settings.json
