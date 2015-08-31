@@ -22,12 +22,16 @@
 #include "V1730_dpppsd.hh"
 #include "Buffer.hh"
 
+
+#ifndef DataHandler__hh
+#define DataHandler__hh
+
 class DataHandler {
 
     public:
     
         // for data acquisition
-        DataHandler(size_t nGrabs, size_t nRepeat, string outfile, V1730Settings &_settings);
+        DataHandler(size_t nGrabs, size_t nRepeat, std::string outfile, V1730Settings &_settings);
         
         // for debugging / trigger rate
         DataHandler(V1730Settings &_settings);
@@ -36,7 +40,7 @@ class DataHandler {
         
         bool decode(Buffer &buf);
         
-        void init(size_t nGrabs, size_t nRepeat, string outfile);
+        void init(size_t nGrabs, size_t nRepeat, std::string outfile);
 
         uint32_t* decode_chan_agg(uint32_t *chanagg, uint32_t group);
 
@@ -68,3 +72,6 @@ class DataHandler {
         std::vector<uint32_t*> times;
 
 };
+
+#endif
+

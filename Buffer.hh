@@ -45,7 +45,7 @@ class Buffer {
         inline void inc(size_t amt) {
             pthread_mutex_lock(&mutex);
             w_ptr += amt;
-            if (r_ptr - buffer >= size) {
+            if ((size_t)(r_ptr - buffer) >= size) {
                 const size_t total = w_ptr - r_ptr;
                 memcpy(buffer,r_ptr,total);
                 r_ptr = buffer;

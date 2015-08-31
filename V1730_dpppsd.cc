@@ -15,9 +15,13 @@
  *  along with WbLSdaq. If not, see <http://www.gnu.org/licenses/>.
  */
  
+#include <cmath>
+#include <iostream>
 #include <stdexcept>
  
 #include "V1730_dpppsd.hh"
+
+using namespace std;
 
 V1730Settings::V1730Settings() {
     //These are "do nothing" defaults
@@ -144,7 +148,7 @@ void V1730Settings::chanDefaults(uint32_t ch) {
 }
 
 
-V1730::V1730(VMEBridge &_bridge, uint32_t _baseaddr, bool busErrReadout) : bridge(_bridge), baseaddr(_baseaddr), berr(busErrReadout) {
+V1730::V1730(VMEBridge &_bridge, uint32_t _baseaddr, bool busErrReadout) : berr(busErrReadout), bridge(_bridge), baseaddr(_baseaddr) {
 
 }
 
@@ -263,7 +267,7 @@ bool V1730::program(V1730Settings &settings) {
     const uint32_t num_buffers = total_locations%largest_buffer ? total_locations/largest_buffer : total_locations/largest_buffer+1;
     uint32_t shifter = num_buffers;
     for (settings.card.buff_org = 0; shifter != 1; shifter = shifter >> 1, settings.card.buff_org++);
-    if (1 << settings.card.buff_org > num_buffers) settings.card.buff_org--;
+    if (1u << settings.card.buff_org > num_buffers) settings.card.buff_org--;
     if (settings.card.buff_org > 0xA) settings.card.buff_org = 0xA;
     if (settings.card.buff_org < 0x2) settings.card.buff_org = 0x2;
     cout << "Largest buffer: " << largest_buffer << " loc\nDesired buffers: " << num_buffers << "\nProgrammed buffers: " << (1<<settings.card.buff_org) << endl;

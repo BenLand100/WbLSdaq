@@ -17,6 +17,10 @@
  
 #include "VMEBridge.hh"
 
+using namespace std;
+
+const std::string VMEBridge::error_codes[6] = {"Success","Bus Error","Comm Error","Generic Error","Invalid Param","Timeout Error"};
+
 VMEBridge::VMEBridge(int link, int board) {
     int res = CAENVME_Init(cvV1718,link,board,&handle);
     if (res) {

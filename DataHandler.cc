@@ -16,6 +16,7 @@
  */
  
 #include <ctime>
+#include <cmath>
 #include <iostream>
 #include <H5Cpp.h>
  
@@ -42,23 +43,23 @@ DataHandler::~DataHandler() {
     }
 }
 
-DataHandler::decode(Buffer &buf) {
+bool DataHandler::decode(Buffer &buf) {
     struct timespec this_time;
     clock_gettime(CLOCK_MONOTONIC,&this_time);
     time_int = (this_time.tv_sec-last_time.tv_sec)+(this_time.tv_nsec-last_time.tv_nsec)*1e-9;
     last_time = this_time;
     
-    for (int idx = 0; idx < grabbed.size(); idx++) lastgrabbed[idx] = grabbed[idx];
+    for (size_t idx = 0; idx < grabbed.size(); idx++) lastgrabbed[idx] = grabbed[idx];
     
     decode_size = buf.fill();
     cout << "buffer fill: " << buf.fill() << " bytes / " << buf.pct() << "%" << endl;
     uint32_t *next = (uint32_t*)buf.rptr(), *start = (uint32_t*)buf.rptr();
-    while (((next = decode_board_agg(next)) - start + 1)*4 < decode_size) {
+    while ((size_t)((next = decode_board_agg(next)) - start + 1)*4 < decode_size) {
         
     }
     buf.dec(decode_size);
     
-    for (int idx = 0; idx < grabbed.size(); idx++) lastgrabbed[idx] = grabbed[idx] - lastgrabbed[idx];
+    for (size_t idx = 0; idx < grabbed.size(); idx++) lastgrabbed[idx] = grabbed[idx] - lastgrabbed[idx];
     
     if (nRepeat > 0) cout << "acquisition cycle: " << cycle+1 << " / " << nRepeat << '\t';
     cout << (nGrabs ? (grabbed[0]/nGrabs > 1.0 ? "100" : to_string((int)round(100.0*grabbed[0]/nGrabs)))+"%" : "") << endl; 
@@ -69,13 +70,13 @@ DataHandler::decode(Buffer &buf) {
     
     if (nGrabs) {
         bool done = true;
-        for (int idx = 0; idx < grabbed.size(); idx++) {
+        for (size_t idx = 0; idx < grabbed.size(); idx++) {
             if (grabbed[idx] < nGrabs) done = false;
         }
         if (done) { 
             writeout();
             if (cycle+1 == nRepeat || nRepeat == 0) return false;
-            for (int idx = 0; idx < grabbed.size(); idx++) {
+            for (size_t idx = 0; idx < grabbed.size(); idx++) {
                 grabbed[idx] = 0;
             }
             cycle++;
@@ -141,7 +142,7 @@ uint32_t* DataHandler::decode_chan_agg(uint32_t *chanagg, uint32_t group) {
     const uint32_t idx0 = chan2idx.count(group * 2 + 0) ? chan2idx[group * 2 + 0] : 999;
     const uint32_t idx1 = chan2idx.count(group * 2 + 1) ? chan2idx[group * 2 + 1] : 999;
     
-    for (uint32_t *event = chanagg+2; event-chanagg+1 < size; event += samples/2+3) {
+    for (uint32_t *event = chanagg+2; (size_t)(event-chanagg+1) < size; event += samples/2+3) {
         
         const bool oddch = event[0] & 0x80000000;
         const uint32_t idx = oddch ? idx1 : idx0;
@@ -191,13 +192,13 @@ uint32_t* DataHandler::decode_board_agg(uint32_t *boardagg) {
     
     uint32_t size = boardagg[0] & 0x0FFFFFFF;
     
-    const uint32_t board = (boardagg[1] >> 28) & 0xF;
-    const bool fail = boardagg[1] & (1 << 26);
-    const uint32_t pattern = (boardagg[1] >> 8) & 0x7FFF;
+    //const uint32_t board = (boardagg[1] >> 28) & 0xF;
+    //const bool fail = boardagg[1] & (1 << 26);
+    //const uint32_t pattern = (boardagg[1] >> 8) & 0x7FFF;
     const uint32_t mask = boardagg[1] & 0xFF;
     
-    const uint32_t count = boardagg[2] & 0x7FFFFF;
-    const uint32_t timetag = boardagg[3];
+    //const uint32_t count = boardagg[2] & 0x7FFFFF;
+    //const uint32_t timetag = boardagg[3];
     
     uint32_t *chans = boardagg+4;
     

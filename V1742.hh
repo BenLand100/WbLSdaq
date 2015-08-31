@@ -15,5 +15,16 @@
  *  along with WbLSdaq. If not, see <http://www.gnu.org/licenses/>.
  */
  
+#include <map>
+#include <vector>
+#include <string>
+ 
 #include "VMEBridge.hh"
 #include "json.hh"
+
+
+#ifndef V1742__hh
+#define V1742__hh
+
+#endif
+

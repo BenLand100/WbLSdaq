@@ -33,6 +33,8 @@
 #include "V1742.hh"
 #include "DataHandler.hh"
 
+using namespace std;
+
 map<string,json::Value> readDB(string file) {
 
     ifstream dbfile;
@@ -64,13 +66,13 @@ void int_handler(int x) {
 }
 
 typedef struct {
-    EventDecoder *acq;
+    DataHandler *acq;
     Buffer *buff;
 } decode_thread_data;
 
 void *decode_thread(void *data) {
     signal(SIGINT,int_handler);
-    EventDecoder *acq = ((decode_thread_data*)data)->acq;
+    DataHandler *acq = ((decode_thread_data*)data)->acq;
     Buffer *buff = ((decode_thread_data*)data)->buff;
     try {
         while (running) {
@@ -125,7 +127,7 @@ int main(int argc, char **argv) {
     cout << "Starting acquisition..." << endl;
     
     Buffer buff(100*1024*1024);
-    EventDecoder acq(ngrabs,nrepeat,outfile,settings);
+    DataHandler acq(ngrabs,nrepeat,outfile,settings);
     vector<uint32_t> temps;
     dgtz.startAcquisition();
     

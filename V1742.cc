@@ -17,3 +17,4 @@
  
 #include "V1742.hh"
 
+using namespace std;

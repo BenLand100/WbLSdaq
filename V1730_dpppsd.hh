@@ -15,8 +15,15 @@
  *  along with WbLSdaq. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <map>
+#include <vector>
+#include <string>
+
 #include "VMEBridge.hh"
 #include "json.hh"
+
+#ifndef V1730_dpppsd__hh
+#define V1730_dpppsd__hh
 
 typedef struct {
 
@@ -110,7 +117,7 @@ class V1730Settings {
     
         V1730Settings();
         
-        V1730Settings(map<string,json::Value> &db);
+        V1730Settings(std::map<std::string,json::Value> &db);
         
         virtual ~V1730Settings();
         
@@ -213,7 +220,7 @@ class V1730 {
             return read32(REG_ACQUISITION_STATUS) & (1 << 3);
         }
         
-        bool checkTemps(vector<uint32_t> &temps, uint32_t danger);
+        bool checkTemps(std::vector<uint32_t> &temps, uint32_t danger);
         
         inline size_t readoutBLT(char *buffer, size_t buffer_size) {
             return berr ? readoutBLT_berr(buffer, buffer_size) : readoutBLT_evtsz(buffer,buffer_size);
@@ -252,3 +259,6 @@ class V1730 {
         size_t readoutBLT_evtsz(char *buffer, size_t buffer_size);
         
 };
+
+#endif
+
