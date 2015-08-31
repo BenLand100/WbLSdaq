@@ -1,0 +1,21 @@
+[0 : 10]
+["lol" : 5]
+[true : 2]
+[-1 : 0]
+
+//This is a comment
+
+/* this is also a comment */ 
+
+/* it can go
+for days
+and days */
+
+"and this is a string"
+
+
+0xffffffff
+0x01
+0x110011
+
+1315.351d10
