@@ -18,6 +18,9 @@
 #include <pthread.h>
 #include <cstring>
 
+#ifndef Buffer__hh
+#define Buffer__hh
+
 class Buffer {
     public:
         Buffer(size_t _size);
@@ -87,3 +90,6 @@ class Buffer {
         char *buffer, *r_ptr, *w_ptr;
         size_t size;
 };
+
+#endif
+

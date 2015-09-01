@@ -46,9 +46,7 @@ V1730Settings::V1730Settings() {
     
 }
 
-V1730Settings::V1730Settings(map<string,json::Value> &db) {
-    
-    json::Value &digitizer = db["DIGITIZER[]"];
+V1730Settings::V1730Settings(json::Value &digitizer, RunDB &db) {
     
     card.dual_trace = 0; // 1 bit
     card.analog_probe = 0; // 2 bit (see docs)
@@ -57,6 +55,7 @@ V1730Settings::V1730Settings(map<string,json::Value> &db) {
     card.digital_virt_probe_2 = 0; // 3 bit (see docs)
     card.coincidence_window = 1; // 3 bit
     
+    string which = digitizer["index"].cast<string>();
     card.global_majority_level = digitizer["global_majority_level"].cast<int>(); // 3 bit
     card.external_global_trigger = digitizer["external_trigger_enable"].cast<bool>() ? 1 : 0; // 1 bit
     card.software_global_trigger = digitizer["software_trigger_enable"].cast<bool>() ? 1 : 0; // 1 bit
@@ -67,11 +66,11 @@ V1730Settings::V1730Settings(map<string,json::Value> &db) {
     card.max_board_agg_blt = digitizer["aggregates_per_transfer"].cast<int>(); 
     
     for (int ch = 0; ch < 16; ch++) {
-        string chname = "CH["+to_string(ch)+"]";
-        if (db.find(chname) == db.end()) {
+        string chname = "CH"+to_string(ch);
+        if (!db.tableExists(which,chname)) {
             chanDefaults(ch);
         } else {
-            json::Value &channel = db[chname];
+            json::Value channel = db.getTable(which,chname);
     
             chans[ch].dynamic_range = 0; // 1 bit
             chans[ch].fixed_baseline = 0; // 12 bit
@@ -294,7 +293,7 @@ bool V1730::checkTemps(vector<uint32_t> &temps, uint32_t danger) {
 
 size_t V1730::readoutBLT_berr(char *buffer, size_t buffer_size) {
     size_t offset = 0, size = 0;
-    while (offset < buffer_size && (size = readBLT(0x0000, buffer+offset, 4090))) {
+    while (offset < buffer_size && (size = readBLT(0x0000, buffer+offset, buffer_size))) {
         offset += size;
     }
     return offset;

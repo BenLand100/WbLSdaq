@@ -17,7 +17,6 @@
  
 #include <pthread.h>
 #include <iostream>
-#include <fstream>
 #include <map>
 #include <vector>
 #include <stdexcept>
@@ -28,36 +27,13 @@
 #include <cstring>
 
 #include "json.hh"
+#include "RunDB.hh"
 #include "VMEBridge.hh"
 #include "V1730_dpppsd.hh"
 #include "V1742.hh"
 #include "DataHandler.hh"
 
 using namespace std;
-
-map<string,json::Value> readDB(string file) {
-
-    ifstream dbfile;
-    dbfile.open(file);
-    if (!dbfile.is_open()) throw runtime_error("Could not open " + file);
-    
-    json::Reader reader(dbfile);
-    dbfile.close();
-    map<string,json::Value> db;
-    
-    json::Value next;
-    while (reader.getValue(next)) {
-        if (next.getType() != json::TOBJECT) throw runtime_error("DB contains non-object values");
-        string name = next["name"].cast<string>();
-        if (next.isMember("index")) {
-            db[name+"["+next["index"].cast<string>()+"]"] = next;
-        } else {
-            db[name+"[]"] = next;
-        }
-    }
-    
-    return db;
-}
 
 bool running;
 
@@ -98,13 +74,13 @@ int main(int argc, char **argv) {
 
     cout << "Reading configuration..." << endl;
     
-    map<string,json::Value> db = readDB(argv[1]);
-    json::Value run = db["RUN[]"];
+    RunDB db;
+    db.addFile(argv[1]);
+    json::Value run = db.getTable("RUN");
     
     const int ngrabs = run["events"].cast<int>();
     const string outfile = run["outfile"].cast<string>();
     const int linknum = run["link_num"].cast<int>();
-    const int baseaddr = run["base_address"].cast<int>();
     const int checktemps = run["check_temps"].cast<bool>();
     int nrepeat;
     if (run.isMember("repeat_times")) {
@@ -112,15 +88,22 @@ int main(int argc, char **argv) {
     } else {
         nrepeat = 0;
     }
+    
+    vector<json::Value> v1730s = db.getGroup("V1730");
+    if (v1730s.size() != 1) {
+        cout << "Must have a single V1730 for now" << endl;
+        return -1;
+    }
+    json::Value &v1730tbl = v1730s[0];
 
     cout << "Opening VME link..." << endl;
     
     VMEBridge bridge(linknum,0);
-    V1730 dgtz(bridge,baseaddr,false);
+    V1730 dgtz(bridge,v1730tbl["base_address"].cast<int>(),false);
    
     cout << "Programming Digitizer..." << endl;
     
-    V1730Settings settings(db);
+    V1730Settings settings(v1730tbl,db);
     
     if (!dgtz.program(settings)) return -1;
     

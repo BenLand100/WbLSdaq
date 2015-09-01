@@ -20,6 +20,7 @@
 #include <string>
 
 #include "VMEBridge.hh"
+#include "RunDB.hh"
 #include "json.hh"
 
 #ifndef V1730_dpppsd__hh
@@ -117,7 +118,7 @@ class V1730Settings {
     
         V1730Settings();
         
-        V1730Settings(std::map<std::string,json::Value> &db);
+        V1730Settings(json::Value &digitizer, RunDB &db);
         
         virtual ~V1730Settings();
         

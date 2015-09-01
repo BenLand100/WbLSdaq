@@ -22,7 +22,6 @@
 #include "V1730_dpppsd.hh"
 #include "Buffer.hh"
 
-
 #ifndef DataHandler__hh
 #define DataHandler__hh
 

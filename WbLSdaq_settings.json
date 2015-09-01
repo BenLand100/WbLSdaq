@@ -1,15 +1,22 @@
 {
 name: "RUN",                    // run settings
 outfile: "test",                // file to save data to (appends .h5 automatically)
-events: 1000000,                   // number of events to grab per channel
+events: 0,                      // number of events to grab per channel (0 -> inf)
 repeat_times: 0,                // number of times to repeat this run (nonzero appends .[number].h5 to outfile)
 link_num: 0,                    // the nth V1718 connected to computer
-base_address: 0xAAAA0000,       // hex address offset for VME
 check_temps: true,              // check temps of ADCs every 100 readouts 
 }
 
 {
-name: "DIGITIZER",              // digitizer global settings
+name: "V1742",                  // V1742 global settings
+index: "fast",                  // Name for subtables, data storage
+  
+}
+
+{
+name: "V1730",                  // V1730 global settings
+index: "master",                // Name for subtables, data storage
+base_address: 0xAAAA0000,       // hex address offset for VME
 global_majority_level: 0,       // global_majority_level+1 requests required for global trigger
 external_trigger_enable: false, // trig in fires a global trigger
 external_trigger_out: false,    // route trig in to trig out
@@ -22,12 +29,12 @@ aggregates_per_transfer: 5,     // maximum board aggregates to read out during a
 
 // duplicate this table for having multiple channels active (change index)
 {
-name: "CH",                     // channel specific settings
-index: "0",                     // for channel 0
+name: "master",                 // master channel specific settings
+index: "CH0",                   // for channel 0
 enabled: true,                  // record events from this channel
 request_global_trigger: true,   // send global trigger request on local trigger
 request_trig_out: false,        // send trigger out request on local trigger
-record_length: 50,             // samples to acquire per trigger
+record_length: 50,              // samples to acquire per trigger
 dc_offset: 0,                   // volts to shift the input by (-1V to 1V)
 baseline_average: 2,            // Choose index [fixed,16,64,256,1024] samples to average baseline
 pulse_polarity: 1,              // Choose index [POSITIVE, NEGATIVE] direction of pulses to trigger on
@@ -46,12 +53,12 @@ events_per_buffer: 50,          // events per readout buffer
 
 // duplicate this table for having multiple channels active (change index)
 {
-name: "CH",                     // channel specific settings
-index: "1",                     // for channel 0
-enabled: false,                  // record events from this channel
-request_global_trigger: false,   // send global trigger request on local trigger
+name: "master",                 // master channel specific settings
+index: "CH1",                   // for channel 1
+enabled: false,                 // record events from this channel
+request_global_trigger: false,  // send global trigger request on local trigger
 request_trig_out: false,        // send trigger out request on local trigger
-record_length: 50,             // samples to acquire per trigger
+record_length: 50,              // samples to acquire per trigger
 dc_offset: 0,                   // volts to shift the input by (-1V to 1V)
 baseline_average: 2,            // Choose index [fixed,16,64,256,1024] samples to average baseline
 pulse_polarity: 0,              // Choose index [POSITIVE, NEGATIVE] direction of pulses to trigger on
