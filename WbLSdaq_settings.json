@@ -68,7 +68,7 @@ ramp_off: [true, true, true, true, true, true], // ramp down (true) or kill down
 name: "V1730",                  // V1730 global settings
 index: "master",                // To match card to subtables, data storage
 base_address: 0xAAAA0000,       // hex address offset for VME
-buffer_size: 100,               // Readout circular buffer size in MiB
+buffer_size: 5,                 // Readout circular buffer size in MiB
 global_majority_level: 0,       // global_majority_level+1 requests required for global trigger
 external_trigger_enable: false, // trig in fires a global trigger
 external_trigger_out: false,    // route trig in to trig out
@@ -85,12 +85,12 @@ name: "CH0",                    // for channel 0
 index: "master",                // master channel specific settings
 enabled: true,                  // record events from this channel
 request_global_trigger: true,   // send global trigger request on local trigger
-request_trig_out: false,        // send trigger out request on local trigger
+request_trig_out: true,         // send trigger out request on local trigger
 record_length: 50,              // samples to acquire per trigger
 dc_offset: 0,                   // volts to shift the input by (-1V to 1V)
 baseline_average: 2,            // Choose index [fixed,16,64,256,1024] samples to average baseline
 pulse_polarity: 1,              // Choose index [POSITIVE, NEGATIVE] direction of pulses to trigger on
-trigger_threshold: 100,          // counts past baseline to trigger
+trigger_threshold: 100,         // counts past baseline to trigger
 self_trigger: false,            // local trigger triggers local acquisition
 pre_trigger: 50,                // samples to acquire before the trigger
 gate_offset: 10,                // samples before the trigger to start gates
@@ -98,9 +98,9 @@ short_gate: 50,                 // short integration window
 long_gate: 100,                 // long integration window
 charge_sensitivity: 2,          // Choose index [5fC,20fC,80fC,320fC,1280fC] for 2Vpp 
 shaped_trigger_width: 10,       // number of samples to send trigger request after trigger
-trigger_holdoff: 50,            // inhibit triggers for this many samples after trigger
+trigger_holdoff: 100,           // inhibit triggers for this many samples after trigger
 trigger_type: 0,                // Choose index [Normal, Coincidence, RESERVED, Anti-coincidence] how to handle trigger validation
-events_per_buffer: 50,          // events per readout buffer
+events_per_buffer: 5,           // events per readout buffer
 }
 
 // duplicate this table for having multiple channels active (change index)
@@ -124,14 +124,14 @@ charge_sensitivity: 2,          // Choose index [5fC,20fC,80fC,320fC,1280fC] for
 shaped_trigger_width: 10,       // number of samples to send trigger request after trigger
 trigger_holdoff: 50,            // inhibit triggers for this many samples after trigger
 trigger_type: 0,                // Choose index [Normal, Coincidence, RESERVED, Anti-coincidence] how to handle trigger validation
-events_per_buffer: 50,          // events per readout buffer
+events_per_buffer: 5,           // events per readout buffer
 }
 
 {
 name: "V1742",                  // V1742 global settings
 index: "fast",                  // To match card to subtables, data storage
 base_address: 0xBBBB0000,       // hex address offset for VME
-buffer_size: 100,               // Readout circular buffer size in MiB
+buffer_size: 5,                 // Readout circular buffer size in MiB
 tr_enabled: false,              // Trigger on TR0,TR1 over/under threshold
 tr_readout: false,              // Save TR0,TR1 traces in readout
 tr_polarity: 0,                 // Choose index [POSITIVE,NEGATIVE] direction of pulses to trigger on
@@ -139,8 +139,8 @@ tr0_threshold: 0x6666,          // TR0 trigger threshold (see docs)
 tr0_dc_offset: 0x8000,          // TR0 dc offset added to signal (see docs)
 tr1_threshold: 0x6666,          // TR0 trigger threshold (see docs)
 tr1_dc_offset: 0x8000,          // TR0 dc offset added to signal (see docs)
-num_samples: 0,                 // Choose index [1024, 520, 256, 136]
-sample_freq: 0,                 // Choose index [5 GHz, 2.5 GHz, 1 GHz]
+num_samples: 2,                 // Choose index [1024, 520, 256, 136]
+sample_freq: 2,                 // Choose index [5 GHz, 2.5 GHz, 1 GHz]
 software_trigger: false,        // Global trigger on software trigger
 external_trigger: true,         // Global trigger on software trigger
 trigger_offset: 0,              // Multiples of 8.5ns to wait after trigger before digitizing samples

@@ -193,3 +193,168 @@ bool V1742::checkTemps(vector<uint32_t> &temps, uint32_t danger) {
     }
     return over;
 }
+
+
+V1742Decoder::V1742Decoder(size_t _eventBuffer, V1742Settings &_settings) : eventBuffer(_eventBuffer), settings(_settings) {
+
+    group_counter = event_counter = decode_counter = 0;
+    
+    nSamples = settings.getNumSamples();
+    for (size_t gr = 0; gr < 4; gr++) {
+        if (settings.getGroupEnabled(gr)) {
+            grActive[gr] = true;
+            grGrabbed[gr] = 0;
+            if (eventBuffer) {
+                for (size_t ch = 0; ch < 8; ch++) {
+                    samples[gr][ch] = new uint16_t[eventBuffer*nSamples];
+                }
+            }
+        } else {
+            grActive[gr] = false;
+        }
+    }
+    
+    if (settings.getTRReadout()) {
+        trActive[0] = trActive[1] = true;
+        if (eventBuffer) {
+            tr_samples[0] = new uint16_t[eventBuffer*nSamples];
+            tr_samples[1] = new uint16_t[eventBuffer*nSamples];
+        }
+    } else {
+        trActive[0] = trActive[1] = false;
+    }
+    
+}
+
+V1742Decoder::~V1742Decoder() {
+    if (eventBuffer) {
+        for (size_t gr = 0; gr < 4; gr++) {
+            if (grActive[gr]) {
+                for (size_t ch = 0; ch < 8; ch++) {
+                    delete [] samples[gr][ch];
+                }
+            }
+        }
+        if (trActive[0]) delete [] tr_samples[0];
+        if (trActive[1]) delete [] tr_samples[1];
+    }
+}
+
+void V1742Decoder::decode(Buffer &buffer) {
+    size_t lastgrabbed[4]; 
+    for (size_t gr = 0; gr < 4; gr++) lastgrabbed[gr] = grGrabbed[gr];
+    
+    decode_size = buffer.fill();
+    cout << settings.getIndex() << " decoding " << decode_size << " bytes." << endl;
+    uint32_t *next = (uint32_t*)buffer.rptr(), *start = (uint32_t*)buffer.rptr();
+    while ((size_t)((next = decode_event_structure(next)) - start + 1)*4 < decode_size);
+    buffer.dec(decode_size);
+    decode_counter++;
+    
+    for (size_t gr = 0; gr < 4; gr++) {
+        if (grActive[gr]) cout << "\tgr" << gr << "\tev: " << grGrabbed[gr]-lastgrabbed[gr] /*<< " / " << (grGrabbed[gr]-lastgrabbed[gr])/time_int << " Hz"*/ << endl;
+    }
+}
+    
+uint32_t* V1742Decoder::decode_event_structure(uint32_t *event) {
+    if (event[0] == 0xFFFFFFFF) {
+        event++; //sometimes padded
+    }
+    if ((event[0] & 0xF0000000) != 0xA0000000) 
+        throw runtime_error("Event structure missing tag");
+        
+    event_counter++;
+    
+    uint32_t size = event[0] & 0xFFFFFFF;
+    
+    /*
+    uint32_t board_id = (event[1] & 0xF800000000) >> 27;
+    uint32_t pattern = (event[1] & 0x3FFF00) >> 8;
+    uint32_t timetag = event[3];
+    */
+    
+    uint32_t mask = event[1] & 0xF;
+    uint32_t counter = event[2] & 0x3FFFFF;
+    
+    if (event_counter != counter) throw runtime_error(settings.getIndex() + " missed an event!");
+    
+    uint32_t *groups = event+4;
+    
+    for (uint32_t gr = 0; gr < 4; gr++) {
+        if (mask & (1 << gr)) {
+            groups = decode_group_structure(groups,gr);
+        }
+    } 
+    
+    return event+size;
+
+}
+
+uint32_t* V1742Decoder::decode_group_structure(uint32_t *group, uint32_t gr) {
+
+    if (!grActive[gr]) throw runtime_error("Recieved group data for inactive group (" + to_string(gr) + ")");
+    
+    //uint32_t cell_index = (group[0] & 0x3FF00000) >> 20;
+    //uint32_t freq = (group[0] >> 16) & 0x3;
+    
+    uint32_t tr = (group[0] >> 12) & 0x1;
+    uint32_t size = group[0] & 0xFFF;
+    
+    if (size/3 != nSamples) throw runtime_error("Recieved sample length " + to_string(size/3) + " does not match expected " + to_string(nSamples) + " (" + to_string(gr) + ")");
+    if (tr && !trActive[gr<3 ? 0 : 1]) throw runtime_error("Received TR"+to_string(gr<3 ? 0 : 1)+" data when not marked for readout (" + to_string(gr) + ")");
+    
+    group_counter++;
+    
+    if (eventBuffer) {
+        size_t ev = grGrabbed[gr]++;
+        if (ev == eventBuffer) throw runtime_error("Decoder buffer for " + settings.getIndex() + " overflowed!");
+        
+        uint32_t *word = group+1;
+        uint16_t *data[8];
+        for (size_t ch = 0; ch < 8; ch++) data[ch] = samples[gr][ch] + ev*nSamples;
+        for (size_t s = 0; s < nSamples; s++, word += 3) {
+            data[0][s] = word[0]&0xFFF;
+            data[1][s] = (word[0]>>12)&0xFFF;
+            data[2][s] = ((word[1]&0xF)<<8)|((word[0]>>24)&0xFF);
+            data[3][s] = (word[1]>>4)&0xFFF;
+            data[4][s] = (word[1]>>16)&0xFFF;
+            data[5][s] = ((word[2]&0xFF)<<4)|((word[1]>>28)&0xF);
+            data[6][s] = (word[2]>>8)&0xFFF;
+            data[7][s] = (word[2]>>20)&0xFFF;
+        }
+        
+        if (tr) {
+            uint16_t *tr = tr_samples[gr<3 ? 0 : 1] + ev*nSamples;
+            for (size_t s = 0; s < nSamples; word += 3) {
+                tr[s++] = word[0]&0xFFF;
+                tr[s++] = (word[0]>>12)&0xFFF;
+                tr[s++] = ((word[1]&0xF)<<8)|((word[0]>>24)&0xFF);
+                tr[s++] = (word[1]>>4)&0xFFF;
+                tr[s++] = (word[1]>>16)&0xFFF;
+                tr[s++] = ((word[2]&0xFF)<<4)|((word[1]>>28)&0xF);
+                tr[s++] = (word[2]>>8)&0xFFF;
+                tr[s++] = (word[2]>>20)&0xFFF;
+            }
+        }
+        
+    } else {
+        grGrabbed[gr]++;
+    }
+    
+    return group + 2 + size + (tr ? size/8 : 0);
+    
+}
+
+size_t V1742Decoder::eventsReady() {
+    size_t grabs = eventBuffer;
+    for (size_t gr = 0; gr < 4; gr++) {
+        if (grActive[gr] && grGrabbed[gr] < grabs) grabs = grGrabbed[gr];
+    }
+    return grabs;
+}
+
+using namespace H5;
+
+void V1742Decoder::writeOut(H5File &file, size_t nEvents) {
+
+}

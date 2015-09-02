@@ -62,6 +62,24 @@ class V1742Settings : public DigitizerSettings  {
         inline std::string getIndex() {
             return index;
         }
+        
+        inline uint32_t getNumSamples() {
+            switch (card.custom_size) {
+                case 0: return 1024;
+                case 1: return 520;
+                case 2: return 256;
+                case 3: return 136;
+                default: throw std::runtime_error("Invalid custom_size");
+            }
+        }
+        
+        inline bool getGroupEnabled(uint32_t gr) {
+            return card.group_enable[gr];
+        }
+        
+        inline bool getTRReadout() {
+            return card.tr_readout;
+        }
     
     protected:
     
@@ -124,6 +142,41 @@ class V1742 : public Digitizer {
         
         virtual bool checkTemps(std::vector<uint32_t> &temps, uint32_t danger);
         
+};
+
+class V1742Decoder : public Decoder {
+
+    public: 
+    
+        V1742Decoder(size_t eventBuffer, V1742Settings &settings);
+        
+        virtual ~V1742Decoder();
+        
+        virtual void decode(Buffer &buffer);
+        
+        virtual size_t eventsReady();
+        
+        virtual void writeOut(H5::H5File &file, size_t nEvents);
+
+    protected:
+        
+        size_t eventBuffer;
+        V1742Settings &settings;
+        
+        size_t decode_size;
+        size_t group_counter,event_counter,decode_counter;
+        
+        uint32_t nSamples;
+        bool grActive[4];
+        size_t grGrabbed[4];
+        uint16_t *samples[4][8];
+        bool trActive[2];
+        uint16_t *tr_samples[2];
+        
+        uint32_t* decode_event_structure(uint32_t *event);
+        
+        uint32_t* decode_group_structure(uint32_t *group, uint32_t gr);
+
 };
 
 #endif

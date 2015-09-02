@@ -40,9 +40,8 @@ void int_handler(int x) {
 }
 
 typedef struct {
-    vector<DigitizerSettings*> *settings;
-    vector<Digitizer*> *digitizers;
     vector<Buffer*> *buffers;
+    vector<Decoder*> *decoders;
     pthread_mutex_t *iomutex;
     pthread_cond_t *newdata;
 } decode_thread_data;
@@ -63,14 +62,12 @@ void *decode_thread(void *_data) {
             }
             for (size_t i = 0; i < data->buffers->size(); i++) {
                 size_t sz = (*data->buffers)[i]->fill();
-                if (sz > 0) {   
-                    (*data->buffers)[i]->dec(sz); // drain
-                    cout << (*data->settings)[i]->getIndex() << " " << sz << " bytes." << endl;
-                }
+                if (sz > 0) (*data->decoders)[i]->decode(*(*data->buffers)[i]);
             }
             pthread_mutex_unlock(data->iomutex);
         }
     } catch (runtime_error &e) {
+        pthread_mutex_unlock(data->iomutex);
         running = false;
         pthread_mutex_lock(data->iomutex);
         cout << "Decode thread aborted: " << e.what() << endl;
@@ -119,34 +116,34 @@ int main(int argc, char **argv) {
     vector<Buffer*> buffers;
     vector<Decoder*> decoders;
     
+    size_t arm_last = 0;
+    
     vector<RunTable> v1730s = db.getGroup("V1730");
     for (size_t i = 0; i < v1730s.size(); i++) {
         RunTable &tbl = v1730s[i];
-        cout << "\tV1730 - " << tbl.getIndex() << endl;
+        cout << "* V1730 - " << tbl.getIndex() << endl;
         V1730Settings *stngs = new V1730Settings(tbl,db);
         settings.push_back(stngs);
         digitizers.push_back(new V1730(bridge,tbl["base_address"].cast<int>()));
         buffers.push_back(new Buffer(tbl["buffer_size"].cast<int>()*1024*1024));
+        if (!digitizers[i]->program(*settings[i])) return -1;
+        if (settings[i]->getIndex() == run["arm_last"].cast<string>()) arm_last = i;
+        // decoders need settings after programming
         decoders.push_back(new V1730Decoder((size_t)(ngrabs*1.5),*stngs));
     }
     
     vector<RunTable> v1742s = db.getGroup("V1742");
     for (size_t i = 0; i < v1742s.size(); i++) {
         RunTable &tbl = v1742s[i];
-        cout << "\tV1742 - " << tbl.getIndex() << endl;
+        cout << "* V1742 - " << tbl.getIndex() << endl;
         V1742Settings *stngs = new V1742Settings(tbl,db);
         settings.push_back(stngs);
         digitizers.push_back(new V1742(bridge,tbl["base_address"].cast<int>()));
         buffers.push_back(new Buffer(tbl["buffer_size"].cast<int>()*1024*1024));
-        decoders.push_back(NULL);
-    }
-    
-    cout << "Programming Digitizers..." << endl;
-    
-    size_t arm_last = 0;
-    for (size_t i = 0; i < digitizers.size(); i++) {
         if (!digitizers[i]->program(*settings[i])) return -1;
         if (settings[i]->getIndex() == run["arm_last"].cast<string>()) arm_last = i;
+        // decoders need settings after programming
+        decoders.push_back(new V1742Decoder((size_t)(ngrabs*1.5),*stngs)); 
     }
     
     cout << "Starting acquisition..." << endl;
@@ -164,9 +161,8 @@ int main(int argc, char **argv) {
     digitizers[arm_last]->startAcquisition();
     
     decode_thread_data data;
-    data.settings = &settings;
-    data.digitizers = &digitizers;
     data.buffers = &buffers;
+    data.decoders = &decoders;
     data.iomutex = &iomutex;
     data.newdata = &newdata;
     pthread_t decode;
@@ -214,15 +210,15 @@ int main(int argc, char **argv) {
         }
     }
     
-    pthread_mutex_lock(&iomutex);
-    cout << "Stopping acquisition..." << endl;
-    pthread_mutex_unlock(&iomutex);
-    
     digitizers[arm_last]->stopAcquisition();
     for (size_t i = 0; i < digitizers.size(); i++) {
         if (i == arm_last) continue;
         digitizers[i]->stopAcquisition();
     }
+    
+    pthread_mutex_lock(&iomutex);
+    cout << "Stopping acquisition..." << endl;
+    pthread_mutex_unlock(&iomutex);
     
     pthread_cond_signal(&newdata);
     

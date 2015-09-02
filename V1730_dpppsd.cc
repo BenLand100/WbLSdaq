@@ -368,13 +368,18 @@ V1730Decoder::~V1730Decoder() {
 }
 
 void V1730Decoder::decode(Buffer &buf) {
+    vector<size_t> lastgrabbed(grabbed);
+    
     decode_size = buf.fill();
+    cout << settings.getIndex() << " decoding " << decode_size << " bytes." << endl;
     uint32_t *next = (uint32_t*)buf.rptr(), *start = (uint32_t*)buf.rptr();
-    while ((size_t)((next = decode_board_agg(next)) - start + 1)*4 < decode_size) {
-        
-    }
+    while ((size_t)((next = decode_board_agg(next)) - start + 1)*4 < decode_size);
     buf.dec(decode_size);
     decode_counter++;
+    
+    for (size_t i = 0; i < idx2chan.size(); i++) {
+        cout << "\tch" << idx2chan[i] << "\tev: " << grabbed[i]-lastgrabbed[i] /*<< " / " << lastgrabbed[i]/time_int << " Hz"*/ << endl;
+    }
 }
 
 size_t V1730Decoder::eventsReady() {
@@ -498,18 +503,18 @@ uint32_t* V1730Decoder::decode_chan_agg(uint32_t *chanagg, uint32_t group) {
         
         if (idx == 999) throw runtime_error("Received data for disabled channel (" + to_string(group*2+oddch?1:0) + ")");
         
-        if (len != samples) throw runtime_error("Number of samples received does not match expected (" + to_string(idx2chan[idx]) + ")");
+        if (len != samples) throw runtime_error("Number of samples received " + to_string(samples) + " does not match expected " + to_string(len) + " (" + to_string(idx2chan[idx]) + ")");
         
         if (eventBuffer) {
             const size_t ev = grabbed[idx]++;
-            if (ev == eventBuffer) throw runtime_error("Decoder buffer overflowed!");
-            uint16_t *data = grabs[idx];
+            if (ev == eventBuffer) throw runtime_error("Decoder buffer for " + settings.getIndex() + " overflowed!");
+            uint16_t *data = grabs[idx] + ev*len;
             
             for (uint32_t *word = event+1, sample = 0; sample < len; word++, sample+=2) {
-                data[ev*len+sample+0] = *word & 0x3FFF;
+                data[sample+0] = *word & 0x3FFF;
                 //uint8_t dp10 = (*word >> 14) & 0x1;
                 //uint8_t dp20 = (*word >> 15) & 0x1;
-                data[ev*len+sample+1] = (*word >> 16) & 0x3FFF;
+                data[sample+1] = (*word >> 16) & 0x3FFF;
                 //uint8_t dp11 = (*word >> 30) & 0x1;
                 //uint8_t dp21 = (*word >> 31) & 0x1;
             }
