@@ -23,7 +23,7 @@
 
 using namespace std;
 
-V1730Settings::V1730Settings() {
+V1730Settings::V1730Settings() : DigitizerSettings("") {
     //These are "do nothing" defaults
     card.dual_trace = 0; // 1 bit
     card.analog_probe = 0; // 2 bit (see docs)
@@ -46,7 +46,7 @@ V1730Settings::V1730Settings() {
     
 }
 
-V1730Settings::V1730Settings(json::Value &digitizer, RunDB &db) {
+V1730Settings::V1730Settings(RunTable &digitizer, RunDB &db) : DigitizerSettings(digitizer.getIndex()){
     
     card.dual_trace = 0; // 1 bit
     card.analog_probe = 0; // 2 bit (see docs)
@@ -55,7 +55,6 @@ V1730Settings::V1730Settings(json::Value &digitizer, RunDB &db) {
     card.digital_virt_probe_2 = 0; // 3 bit (see docs)
     card.coincidence_window = 1; // 3 bit
     
-    string which = digitizer["index"].cast<string>();
     card.global_majority_level = digitizer["global_majority_level"].cast<int>(); // 3 bit
     card.external_global_trigger = digitizer["external_trigger_enable"].cast<bool>() ? 1 : 0; // 1 bit
     card.software_global_trigger = digitizer["software_trigger_enable"].cast<bool>() ? 1 : 0; // 1 bit
@@ -67,10 +66,10 @@ V1730Settings::V1730Settings(json::Value &digitizer, RunDB &db) {
     
     for (int ch = 0; ch < 16; ch++) {
         string chname = "CH"+to_string(ch);
-        if (!db.tableExists(which,chname)) {
+        if (!db.tableExists(chname,index)) {
             chanDefaults(ch);
         } else {
-            json::Value channel = db.getTable(which,chname);
+            RunTable channel = db.getTable(chname,index);
     
             chans[ch].dynamic_range = 0; // 1 bit
             chans[ch].fixed_baseline = 0; // 12 bit
@@ -147,7 +146,7 @@ void V1730Settings::chanDefaults(uint32_t ch) {
 }
 
 
-V1730::V1730(VMEBridge &_bridge, uint32_t _baseaddr, bool busErrReadout) : berr(busErrReadout), bridge(_bridge), baseaddr(_baseaddr) {
+V1730::V1730(VMEBridge &_bridge, uint32_t _baseaddr) : Digitizer(_bridge,_baseaddr) {
 
 }
 
@@ -156,7 +155,8 @@ V1730::~V1730() {
     write32(REG_BOARD_CONFIGURATION_RELOAD,0);
 }
 
-bool V1730::program(V1730Settings &settings) {
+bool V1730::program(DigitizerSettings &_settings) {
+    V1730Settings &settings = dynamic_cast<V1730Settings&>(_settings);
     try {
         settings.validate();
     } catch (runtime_error &e) {
@@ -276,10 +276,27 @@ bool V1730::program(V1730Settings &settings) {
     write16(REG_READOUT_BLT_AGGREGATE_NUMBER,settings.card.max_board_agg_blt);
     
     //Enable VME BLT readout
-    write16(REG_READOUT_CONTROL,(berr ? 1 : 0)<<4);
+    write16(REG_READOUT_CONTROL,1<<4);
     
     return true;
 }
+
+void V1730::startAcquisition() {
+    write32(REG_ACQUISITION_CONTROL,1<<2);
+}
+
+void V1730::stopAcquisition() {
+    write32(REG_ACQUISITION_CONTROL,0);
+}
+
+bool V1730::acquisitionRunning() {
+    return read32(REG_ACQUISITION_STATUS) & (1 << 2);
+}
+
+bool V1730::readoutReady() {
+    return read32(REG_ACQUISITION_STATUS) & (1 << 3);
+}
+
 
 bool V1730::checkTemps(vector<uint32_t> &temps, uint32_t danger) {
     temps.resize(16);
@@ -289,14 +306,6 @@ bool V1730::checkTemps(vector<uint32_t> &temps, uint32_t danger) {
         if (temps[ch] >= danger) over = true;
     }
     return over;
-}
-
-size_t V1730::readoutBLT_berr(char *buffer, size_t buffer_size) {
-    size_t offset = 0, size = 0;
-    while (offset < buffer_size && (size = readBLT(0x0000, buffer+offset, buffer_size))) {
-        offset += size;
-    }
-    return offset;
 }
 
 size_t V1730::readoutBLT_evtsz(char *buffer, size_t buffer_size) {
@@ -322,4 +331,229 @@ size_t V1730::readoutBLT_evtsz(char *buffer, size_t buffer_size) {
         }
     }
     return total;
+}
+
+
+
+V1730Decoder::V1730Decoder(size_t _eventBuffer, V1730Settings &_settings) : eventBuffer(_eventBuffer), settings(_settings) {
+
+    decode_counter = chanagg_counter = boardagg_counter = 0;
+    
+    for (size_t ch = 0; ch < 16; ch++) {
+        if (settings.getEnabled(ch)) {
+            chan2idx[ch] = nsamples.size();
+            idx2chan[nsamples.size()] = ch;
+            nsamples.push_back(settings.getRecordLength(ch));
+            grabbed.push_back(0);
+            if (eventBuffer > 0) {
+                grabs.push_back(new uint16_t[eventBuffer*nsamples.back()]);
+                baselines.push_back(new uint16_t[eventBuffer]);
+                qshorts.push_back(new uint16_t[eventBuffer]);
+                qlongs.push_back(new uint16_t[eventBuffer]);
+                times.push_back(new uint32_t[eventBuffer]);
+            }
+        }
+    }
+
+}
+
+V1730Decoder::~V1730Decoder() {
+    for (size_t i = 0; i < grabs.size(); i++) {
+        delete [] grabs[i];
+        delete [] baselines[i];
+        delete [] qshorts[i];
+        delete [] qlongs[i];
+        delete [] times[i];
+    }
+}
+
+void V1730Decoder::decode(Buffer &buf) {
+    decode_size = buf.fill();
+    uint32_t *next = (uint32_t*)buf.rptr(), *start = (uint32_t*)buf.rptr();
+    while ((size_t)((next = decode_board_agg(next)) - start + 1)*4 < decode_size) {
+        
+    }
+    buf.dec(decode_size);
+    decode_counter++;
+}
+
+size_t V1730Decoder::eventsReady() {
+    size_t grabs = grabbed[0];
+    for (size_t idx = 1; idx < grabbed.size(); idx++) {
+        if (grabbed[idx] < grabs) grabs = grabbed[idx];
+    }
+    return grabs;
+}
+
+using namespace H5;
+
+void V1730Decoder::writeOut(H5File &file, size_t nEvents) {
+
+    for (size_t i = 0; i < nsamples.size(); i++) {
+        cout << "Dumping channel " << idx2chan[i] << "... ";
+    
+        string groupname = "/ch" + to_string(idx2chan[i]);
+        Group group = file.createGroup(groupname);
+        
+        cout << "Attributes, ";
+        
+        DataSpace scalar(0,NULL);
+        
+        double dval;
+        uint32_t ival;
+        
+        Attribute bits = group.createAttribute("bits",PredType::NATIVE_UINT32,scalar);
+        ival = 14;
+        bits.write(PredType::NATIVE_INT32,&ival);
+        
+        Attribute ns_sample = group.createAttribute("ns_sample",PredType::NATIVE_DOUBLE,scalar);
+        dval = 2.0;
+        ns_sample.write(PredType::NATIVE_DOUBLE,&dval);
+        
+        Attribute offset = group.createAttribute("offset",PredType::NATIVE_UINT32,scalar);
+        ival = settings.getDCOffset(idx2chan[i]);
+        offset.write(PredType::NATIVE_UINT32,&ival);
+        
+        Attribute samples = group.createAttribute("samples",PredType::NATIVE_UINT32,scalar);
+        ival = settings.getRecordLength(idx2chan[i]);
+        samples.write(PredType::NATIVE_UINT32,&ival);
+        
+        Attribute presamples = group.createAttribute("presamples",PredType::NATIVE_UINT32,scalar);
+        ival = settings.getPreSamples(idx2chan[i]);
+        presamples.write(PredType::NATIVE_UINT32,&ival);
+        
+        Attribute threshold = group.createAttribute("threshold",PredType::NATIVE_UINT32,scalar);
+        ival = settings.getThreshold(idx2chan[i]);
+        threshold.write(PredType::NATIVE_UINT32,&ival);
+        
+        hsize_t dimensions[2];
+        dimensions[0] = nEvents;
+        dimensions[1] = nsamples[i];
+        
+        DataSpace samplespace(2, dimensions);
+        DataSpace metaspace(1, dimensions);
+        
+        cout << "Samples, ";
+        DataSet samples_ds = file.createDataSet(groupname+"/samples", PredType::NATIVE_UINT16, samplespace);
+        samples_ds.write(grabs[i], PredType::NATIVE_UINT16);
+        memcpy(grabs[i],grabs[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
+        
+        cout << "Baselines, ";
+        DataSet baselines_ds = file.createDataSet(groupname+"/baselines", PredType::NATIVE_UINT16, metaspace);
+        baselines_ds.write(baselines[i], PredType::NATIVE_UINT16);
+        memcpy(baselines[i],baselines[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
+        
+        cout << "QShorts, ";
+        DataSet qshorts_ds = file.createDataSet(groupname+"/qshorts", PredType::NATIVE_UINT16, metaspace);
+        qshorts_ds.write(qshorts[i], PredType::NATIVE_UINT16);
+        memcpy(qshorts[i],qshorts[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
+        
+        cout << "QLongs, ";
+        DataSet qlongs_ds = file.createDataSet(groupname+"/qlongs", PredType::NATIVE_UINT16, metaspace);
+        qlongs_ds.write(qlongs[i], PredType::NATIVE_UINT16);
+        memcpy(qlongs[i],qlongs[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
+
+        cout << "Times";
+        DataSet times_ds = file.createDataSet(groupname+"/times", PredType::NATIVE_UINT32, metaspace);
+        times_ds.write(times[i], PredType::NATIVE_UINT32);
+        memcpy(times[i],times[i]+nEvents,sizeof(uint32_t)*(grabbed[i]-nEvents));
+        
+        grabbed[i] -= nEvents;
+        
+        cout << endl;
+    }
+}
+
+uint32_t* V1730Decoder::decode_chan_agg(uint32_t *chanagg, uint32_t group) {
+    const bool format_flag = chanagg[0] & 0x80000000;
+    if (!format_flag) throw runtime_error("Channel format not found");
+    
+    chanagg_counter++;
+    
+    const uint32_t size = chanagg[0] & 0x7FFF;
+    const uint32_t format = chanagg[1];
+    const uint32_t samples = (format & 0xFFF)*8;
+    
+    /*
+    //Metadata
+    const bool dualtrace_enable = format & (1<<31);
+    const bool charge_enable =format & (1<<30);
+    const bool time_enable = format & (1<<29);
+    const bool baseline_enable = format & (1<<28);
+    const bool waveform_enable = format & (1<<27);
+    const uint32_t extras = (format >> 24) & 0x7;
+    const uint32_t analog_probe = (format >> 22) & 0x3;
+    const uint32_t digital_probe_2 = (format >> 19) & 0x7;
+    const uint32_t digital_probe_1 = (format >> 16) & 0x7;
+    */
+    
+    const uint32_t idx0 = chan2idx.count(group * 2 + 0) ? chan2idx[group * 2 + 0] : 999;
+    const uint32_t idx1 = chan2idx.count(group * 2 + 1) ? chan2idx[group * 2 + 1] : 999;
+    
+    for (uint32_t *event = chanagg+2; (size_t)(event-chanagg+1) < size; event += samples/2+3) {
+        
+        const bool oddch = event[0] & 0x80000000;
+        const uint32_t idx = oddch ? idx1 : idx0;
+        const uint32_t len = nsamples[idx];
+        
+        if (idx == 999) throw runtime_error("Received data for disabled channel (" + to_string(group*2+oddch?1:0) + ")");
+        
+        if (len != samples) throw runtime_error("Number of samples received does not match expected (" + to_string(idx2chan[idx]) + ")");
+        
+        if (eventBuffer) {
+            const size_t ev = grabbed[idx]++;
+            if (ev == eventBuffer) throw runtime_error("Decoder buffer overflowed!");
+            uint16_t *data = grabs[idx];
+            
+            for (uint32_t *word = event+1, sample = 0; sample < len; word++, sample+=2) {
+                data[ev*len+sample+0] = *word & 0x3FFF;
+                //uint8_t dp10 = (*word >> 14) & 0x1;
+                //uint8_t dp20 = (*word >> 15) & 0x1;
+                data[ev*len+sample+1] = (*word >> 16) & 0x3FFF;
+                //uint8_t dp11 = (*word >> 30) & 0x1;
+                //uint8_t dp21 = (*word >> 31) & 0x1;
+            }
+            
+            baselines[idx][ev] = event[1+samples/2+0] & 0xFFFF;
+            //uint16_t extratime = (event[1+samples/2+0] >> 16) & 0xFFFF;
+            qshorts[idx][ev] = event[1+samples/2+1] & 0x7FFF;
+            qlongs[idx][ev] = (event[1+samples/2+1] >> 16) & 0xFFFF;
+            times[idx][ev] = event[0] & 0x7FFFFFFF;
+        } else {
+            grabbed[idx]++;
+        }
+    
+    }
+    
+    return chanagg + size;
+}
+
+uint32_t* V1730Decoder::decode_board_agg(uint32_t *boardagg) {
+    if (boardagg[0] == 0xFFFFFFFF) {
+        boardagg++; //sometimes padded
+    }
+    if ((boardagg[0] & 0xF0000000) != 0xA0000000) 
+        throw runtime_error("Board aggregate missing tag");
+    
+    boardagg_counter++;    
+    
+    uint32_t size = boardagg[0] & 0x0FFFFFFF;
+    
+    //const uint32_t board = (boardagg[1] >> 28) & 0xF;
+    //const bool fail = boardagg[1] & (1 << 26);
+    //const uint32_t pattern = (boardagg[1] >> 8) & 0x7FFF;
+    const uint32_t mask = boardagg[1] & 0xFF;
+    
+    //const uint32_t count = boardagg[2] & 0x7FFFFF;
+    //const uint32_t timetag = boardagg[3];
+    
+    uint32_t *chans = boardagg+4;
+    
+    for (uint32_t gr = 0; gr < 8; gr++) {
+        if (mask & (1 << gr)) {
+            chans = decode_chan_agg(chans,gr);
+        }
+    } 
+    
+    return boardagg+size;
 }

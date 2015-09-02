@@ -4,12 +4,13 @@ outfile: "test",                // file to save data to (appends .h5 automatical
 events: 0,                      // number of events to grab per channel (0 -> inf)
 repeat_times: 0,                // number of times to repeat this run (nonzero appends .[number].h5 to outfile)
 link_num: 0,                    // the nth V1718 connected to computer
-check_temps: true,              // check temps of ADCs every 100 readouts 
+check_temps_every: 10,          // check temps of ADCs every X seconds 
+arm_last: "master",             // index of the digitizer to arm last (generates triggers)
 }
 
 {
 name: "V6533",                  // V6533 global settings
-index: "pos0",                  // Name for subtables, data storage
+index: "pos0",                  // To match card to subtables, data storage
 base_address: 0x22220000,       // hex address offset for VME
 off_at_end: false,              // ramp down to 0V after run
 voltages: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // Voltage set points
@@ -23,7 +24,7 @@ ramp_off: [true, true, true, true, true, true], // ramp down (true) or kill down
 
 {
 name: "V6533",                  // V6533 global settings
-index: "pos1",                  // Name for subtables, data storage
+index: "pos1",                  // To match card to subtables, data storage
 base_address: 0x33330000,       // hex address offset for VME
 off_at_end: false,              // ramp down to 0V after run
 voltages: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // Voltage set points
@@ -37,7 +38,7 @@ ramp_off: [true, true, true, true, true, true], // ramp down (true) or kill down
 
 {
 name: "V6533",                  // V6533 global settings
-index: "neg0",                  // Name for subtables, data storage
+index: "neg0",                  // To match card to subtables, data storage
 base_address: 0x55550000,       // hex address offset for VME
 off_at_end: false,              // ramp down to 0V after run
 voltages: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // Voltage set points
@@ -51,7 +52,7 @@ ramp_off: [true, true, true, true, true, true], // ramp down (true) or kill down
 
 {
 name: "V6533",                  // V6533 global settings
-index: "neg1",                  // Name for subtables, data storage
+index: "neg1",                  // To match card to subtables, data storage
 base_address: 0x66660000,       // hex address offset for VME
 off_at_end: false,              // ramp down to 0V after run
 voltages: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // Voltage set points
@@ -65,8 +66,9 @@ ramp_off: [true, true, true, true, true, true], // ramp down (true) or kill down
 
 {
 name: "V1730",                  // V1730 global settings
-index: "master",                // Name for subtables, data storage
+index: "master",                // To match card to subtables, data storage
 base_address: 0xAAAA0000,       // hex address offset for VME
+buffer_size: 100,               // Readout circular buffer size in MiB
 global_majority_level: 0,       // global_majority_level+1 requests required for global trigger
 external_trigger_enable: false, // trig in fires a global trigger
 external_trigger_out: false,    // route trig in to trig out
@@ -79,8 +81,8 @@ aggregates_per_transfer: 5,     // maximum board aggregates to read out during a
 
 // duplicate this table for having multiple channels active (change index)
 {
-name: "master",                 // master channel specific settings
-index: "CH0",                   // for channel 0
+name: "CH0",                    // for channel 0
+index: "master",                // master channel specific settings
 enabled: true,                  // record events from this channel
 request_global_trigger: true,   // send global trigger request on local trigger
 request_trig_out: false,        // send trigger out request on local trigger
@@ -103,8 +105,8 @@ events_per_buffer: 50,          // events per readout buffer
 
 // duplicate this table for having multiple channels active (change index)
 {
-name: "master",                 // master channel specific settings
-index: "CH1",                   // for channel 1
+name: "CH1",                    // for channel 1
+index: "master",                // master channel specific settings
 enabled: false,                 // record events from this channel
 request_global_trigger: false,  // send global trigger request on local trigger
 request_trig_out: false,        // send trigger out request on local trigger
@@ -127,9 +129,29 @@ events_per_buffer: 50,          // events per readout buffer
 
 {
 name: "V1742",                  // V1742 global settings
-index: "fast",                  // Name for subtables, data storage
+index: "fast",                  // To match card to subtables, data storage
 base_address: 0xBBBB0000,       // hex address offset for VME
-  
+buffer_size: 100,               // Readout circular buffer size in MiB
+tr_enabled: false,              // Trigger on TR0,TR1 over/under threshold
+tr_readout: false,              // Save TR0,TR1 traces in readout
+tr_polarity: 0,                 // Choose index [POSITIVE,NEGATIVE] direction of pulses to trigger on
+tr0_threshold: 0x6666,          // TR0 trigger threshold (see docs)
+tr0_dc_offset: 0x8000,          // TR0 dc offset added to signal (see docs)
+tr1_threshold: 0x6666,          // TR0 trigger threshold (see docs)
+tr1_dc_offset: 0x8000,          // TR0 dc offset added to signal (see docs)
+num_samples: 0,                 // Choose index [1024, 520, 256, 136]
+sample_freq: 0,                 // Choose index [5 GHz, 2.5 GHz, 1 GHz]
+software_trigger: false,        // Global trigger on software trigger
+external_trigger: true,         // Global trigger on software trigger
+trigger_offset: 0,              // Multiples of 8.5ns to wait after trigger before digitizing samples
+events_per_transfer: 10,        // Max events to transfer during one VME BLT
 }
 
+// duplicate this table for having multiple groups active (change index)
+{
+name: "GR0",
+index: "fast",
+enabled: true,
+dc_offsets: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], //16 bit (-1V, 1V) offset added to signal
+}
 

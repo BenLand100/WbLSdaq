@@ -20,6 +20,7 @@
 #include <string>
  
 #include "VMEBridge.hh"
+#include "Digitizer.hh"
 #include "RunDB.hh"
 #include "json.hh"
 
@@ -45,32 +46,38 @@ typedef struct {
     uint8_t max_event_blt; //8 bit events per transfer
 } V1742_card_config;
 
-class V1742Settings {
+class V1742Settings : public DigitizerSettings  {
     friend class V1742;
 
     public:
     
         V1742Settings();
         
-        V1742Settings(json::Value &digitizer, RunDB &db);
+        V1742Settings(RunTable &digitizer, RunDB &db);
         
         virtual ~V1742Settings();
         
         void validate();
         
+        inline std::string getIndex() {
+            return index;
+        }
     
     protected:
     
         V1742_card_config card;
         
+        void groupDefaults(uint32_t group);
+        
 };
 
-class V1742 {
+class V1742 : public Digitizer {
 
     //system wide
     #define REG_GROUP_CONFIG 0x8000
     #define REG_CUSTOM_SIZE 0x8020
     #define REG_SAMPLE_FREQ 0x80D8
+    #define REG_FRONT_PANEL_CONTROL 0x811C
     #define REG_DUMMY 0xEF20
     #define REG_SOFTWARE_RESET 0xEF24
     #define REG_SOFTWARE_CLEAR 0xEF28
@@ -98,68 +105,24 @@ class V1742 {
     #define REG_EVENT_SIZE 0x814C
     #define REG_READOUT_CONTROL 0xEF00
     #define REG_READOUT_STATUS 0xEF04
-    #define REG_READOUT_BLT_AGGREGATE_NUMBE 0xEF1C
+    #define REG_MAX_EVENT_BLT 0xEF1C
     
     public:
-        V1742(VMEBridge &_bridge, uint32_t _baseaddr, bool busErrReadout = true);
+        V1742(VMEBridge &_bridge, uint32_t _baseaddr);
         
         virtual ~V1742();
         
-        bool program(V1742Settings &settings);
+        virtual bool program(DigitizerSettings &settings);
         
-        inline void startAcquisition() {
-            write32(REG_ACQUISITION_CONTROL,(1<<3)|(1<<2));
-        }
+        virtual void startAcquisition();
         
-        inline void stopAcquisition() {
-            write32(REG_ACQUISITION_CONTROL,0);
-        }
+        virtual void stopAcquisition();
         
-        inline bool acquisitionRunning() {
-            return read32(REG_ACQUISITION_STATUS) & (1 << 2);
-        }
+        virtual bool acquisitionRunning();
         
-        inline bool readoutReady() {
-            return read32(REG_ACQUISITION_STATUS) & (1 << 3);
-        }
+        virtual bool readoutReady();
         
-        bool checkTemps(std::vector<uint32_t> &temps, uint32_t danger);
-        
-        inline size_t readoutBLT(char *buffer, size_t buffer_size) {
-            return berr ? readoutBLT_berr(buffer, buffer_size) : readoutBLT_evtsz(buffer,buffer_size);
-        }
-        
-        inline void write16(uint32_t reg, uint32_t data) {
-            bridge.write16(baseaddr|reg,data);
-        }
-        
-        inline uint32_t read16(uint32_t reg) {
-            return bridge.read16(baseaddr|reg);
-        }
-        
-        inline void write32(uint32_t reg, uint32_t data) {
-            bridge.write32(baseaddr|reg,data);
-        }
-        
-        inline uint32_t read32(uint32_t reg) {
-            return bridge.read32(baseaddr|reg);
-        }
-        
-        inline uint32_t readBLT(uint32_t addr, void *buffer, uint32_t size) {
-            return bridge.readBLT(baseaddr|addr,buffer,size);
-        }
-        
-    protected:
-        
-        bool berr;
-        VMEBridge &bridge;
-        uint32_t baseaddr;
-        
-        //for bus error read
-        size_t readoutBLT_berr(char *buffer, size_t buffer_size);
-        
-        //for event size read
-        size_t readoutBLT_evtsz(char *buffer, size_t buffer_size);
+        virtual bool checkTemps(std::vector<uint32_t> &temps, uint32_t danger);
         
 };
 

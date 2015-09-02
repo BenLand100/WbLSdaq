@@ -20,6 +20,7 @@
 #include <string>
 
 #include "VMEBridge.hh"
+#include "Digitizer.hh"
 #include "RunDB.hh"
 #include "json.hh"
 
@@ -111,14 +112,14 @@ typedef struct {
     
 } V1730_card_config;
 
-class V1730Settings {
+class V1730Settings : public DigitizerSettings {
     friend class V1730;
 
     public:
     
         V1730Settings();
         
-        V1730Settings(json::Value &digitizer, RunDB &db);
+        V1730Settings(RunTable &digitizer, RunDB &db);
         
         virtual ~V1730Settings();
         
@@ -143,6 +144,10 @@ class V1730Settings {
         inline uint32_t getThreshold(uint32_t ch) {
             return chans[ch].trg_threshold;
         }
+        
+        inline std::string getIndex() {
+            return index;
+        }
     
     protected:
     
@@ -153,7 +158,7 @@ class V1730Settings {
         
 };
 
-class V1730 {
+class V1730 : public Digitizer {
 
     //system wide
     #define REG_CONFIG 0x8000
@@ -199,66 +204,63 @@ class V1730 {
     #define REG_READOUT_BLT_AGGREGATE_NUMBER 0xEF1C
     
     public:
-        V1730(VMEBridge &_bridge, uint32_t _baseaddr, bool busErrReadout = true);
+        V1730(VMEBridge &_bridge, uint32_t _baseaddr);
         
         virtual ~V1730();
         
-        bool program(V1730Settings &settings);
+        virtual bool program(DigitizerSettings &settings);
         
-        inline void startAcquisition() {
-            write32(REG_ACQUISITION_CONTROL,1<<2);
-        }
+        virtual void startAcquisition();
         
-        inline void stopAcquisition() {
-            write32(REG_ACQUISITION_CONTROL,0);
-        }
+        virtual void stopAcquisition();
         
-        inline bool acquisitionRunning() {
-            return read32(REG_ACQUISITION_STATUS) & (1 << 2);
-        }
+        virtual bool acquisitionRunning();
         
-        inline bool readoutReady() {
-            return read32(REG_ACQUISITION_STATUS) & (1 << 3);
-        }
+        virtual bool readoutReady();
         
-        bool checkTemps(std::vector<uint32_t> &temps, uint32_t danger);
-        
-        inline size_t readoutBLT(char *buffer, size_t buffer_size) {
-            return berr ? readoutBLT_berr(buffer, buffer_size) : readoutBLT_evtsz(buffer,buffer_size);
-        }
-        
-        inline void write16(uint32_t reg, uint32_t data) {
-            bridge.write16(baseaddr|reg,data);
-        }
-        
-        inline uint32_t read16(uint32_t reg) {
-            return bridge.read16(baseaddr|reg);
-        }
-        
-        inline void write32(uint32_t reg, uint32_t data) {
-            bridge.write32(baseaddr|reg,data);
-        }
-        
-        inline uint32_t read32(uint32_t reg) {
-            return bridge.read32(baseaddr|reg);
-        }
-        
-        inline uint32_t readBLT(uint32_t addr, void *buffer, uint32_t size) {
-            return bridge.readBLT(baseaddr|addr,buffer,size);
-        }
+        virtual bool checkTemps(std::vector<uint32_t> &temps, uint32_t danger);
         
     protected:
         
-        bool berr;
-        VMEBridge &bridge;
-        uint32_t baseaddr;
-        
-        //for bus error read
-        size_t readoutBLT_berr(char *buffer, size_t buffer_size);
-        
-        //for event size read
         size_t readoutBLT_evtsz(char *buffer, size_t buffer_size);
+
+};
+
+class V1730Decoder : public Decoder {
+
+    public: 
+    
+        V1730Decoder(size_t eventBuffer, V1730Settings &settings);
         
+        virtual ~V1730Decoder();
+        
+        virtual void decode(Buffer &buffer);
+        
+        virtual size_t eventsReady();
+        
+        virtual void writeOut(H5::H5File &file, size_t nEvents);
+
+    protected:
+        
+        size_t eventBuffer;
+        V1730Settings &settings;
+        
+        size_t decode_counter;
+        size_t chanagg_counter;
+        size_t boardagg_counter;
+        
+        size_t decode_size;
+        
+        std::map<uint32_t,uint32_t> chan2idx,idx2chan;
+        std::vector<size_t> nsamples;
+        std::vector<size_t> grabbed;
+        std::vector<uint16_t*> grabs, baselines, qshorts, qlongs;
+        std::vector<uint32_t*> times;
+
+        uint32_t* decode_chan_agg(uint32_t *chanagg, uint32_t group);
+
+        uint32_t* decode_board_agg(uint32_t *boardagg);
+
 };
 
 #endif

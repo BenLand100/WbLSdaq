@@ -24,6 +24,46 @@
 #ifndef RunDB__hh
 #define RunDB__hh
 
+class RunTable : protected json::Value {
+
+    public:
+        
+        inline RunTable(json::Value value) : json::Value(value) { 
+            if (!isMember("name")) throw std::runtime_error("All tables must have a name.");
+            name = getMember("name").cast<std::string>();
+            if (isMember("index")) {
+                index = getMember("index").cast<std::string>();
+            } else {
+                index = "";
+            }
+        }
+        
+        inline RunTable() : json::Value() { 
+        }
+        
+        inline bool isMember(const std::string &key) const { 
+            return json::Value::isMember(key); 
+        }
+        
+        inline json::Value& operator[](const std::string &key) const {
+            if (!isMember(key)) throw std::runtime_error("Table " + name + "[" + index + "] missing field " + key);
+            return getMember(key); 
+        }
+        
+        inline std::string getName() {
+            return name;
+        }
+        
+        inline std::string getIndex() {
+            return index;
+        }
+        
+    protected:
+    
+        std::string name, index;
+
+};
+
 class RunDB {
 
     public: 
@@ -36,15 +76,15 @@ class RunDB {
         
         bool tableExists(std::string name, std::string index = "");
         
-        json::Value getTable(std::string name, std::string index = "");
+        RunTable getTable(std::string name, std::string index = "");
         
         bool groupExists(std::string name);
         
-        std::vector<json::Value> getGroup(std::string name);
+        std::vector<RunTable> getGroup(std::string name);
         
     protected:
     
-        std::map<std::string,std::map<std::string,json::Value>> db;
+        std::map<std::string,std::map<std::string,RunTable>> db;
 
 };
 

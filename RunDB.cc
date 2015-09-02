@@ -55,7 +55,7 @@ bool RunDB::tableExists(string name, string index) {
     return (db.count(name) != 0) && (db[name].count(index) != 0);
 }
 
-json::Value RunDB::getTable(string name, string index) {
+RunTable RunDB::getTable(string name, string index) {
     if (!db.count(name)) throw runtime_error("No table found: " + name + "[" + index + "]");
     if (!db[name].count(index)) throw runtime_error("No table found: " + name + "[" + index + "]");
     return db[name][index];
@@ -65,11 +65,11 @@ bool RunDB::groupExists(string name) {
     return db.count(name) != 0;
 }
 
-vector<json::Value> RunDB::getGroup(string name) {
+vector<RunTable> RunDB::getGroup(string name) {
     if (!db.count(name)) throw runtime_error("No group found: " + name);
-    map<string,json::Value> &dbgroup = db[name];
-    vector<json::Value> group;
-    for (map<string,json::Value>::iterator iter = dbgroup.begin(); iter != dbgroup.end(); iter++) {
+    map<string,RunTable> &dbgroup = db[name];
+    vector<RunTable> group;
+    for (map<string,RunTable>::iterator iter = dbgroup.begin(); iter != dbgroup.end(); iter++) {
         group.push_back(iter->second);
     }
     return group;
