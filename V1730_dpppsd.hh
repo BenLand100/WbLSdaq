@@ -159,52 +159,53 @@ class V1730Settings : public DigitizerSettings {
 };
 
 class V1730 : public Digitizer {
-
-    //system wide
-    #define REG_CONFIG 0x8000
-    #define REG_CONFIG_SET 0x8004
-    #define REG_CONFIG_CLEAR 0x8008
-    #define REG_BUFF_ORG 0x800C
-    #define REG_FRONT_PANEL_CONTROL 0x811C
-    #define REG_DUMMY 0xEF20
-    #define REG_SOFTWARE_RESET 0xEF24
-    #define REG_SOFTWARE_CLEAR 0xEF28
-    #define REG_BOARD_CONFIGURATION_RELOAD 0xEF34
-
-    //per channel, or with 0x0n00
-    #define REG_RECORD_LENGTH 0x1020
-    #define REG_DYNAMIC_RANGE 0x1024
-    #define REG_NEV_AGGREGATE 0x1034
-    #define REG_PRE_TRG 0x1038
-    #define REG_SHORT_GATE 0x1054
-    #define REG_LONG_GATE 0x1058
-    #define REG_PRE_GATE 0x105C
-    #define REG_DPP_TRG_THRESHOLD 0x1060
-    #define REG_BASELINE_THRESHOLD 0x1064
-    #define REG_SHAPED_TRIGGER_WIDTH 0x1070
-    #define REG_TRIGGER_HOLDOFF 0x1074
-    #define REG_DPP_CTRL 0x1080
-    #define REG_TRIGGER_CTRL 0x1084
-    #define REG_DC_OFFSET 0x1098
-    #define REG_CHANNEL_TEMP 0x10A8
-
-    //acquisition 
-    #define REG_ACQUISITION_CONTROL 0x8100
-    #define REG_ACQUISITION_STATUS 0x8104
-    #define REG_SOFTWARE_TRIGGER 0x8108
-    #define REG_GLOBAL_TRIGGER_MASK 0x810C
-    #define REG_TRIGGER_OUT_MASK 0x8110
-    #define REG_CHANNEL_ENABLE_MASK 0x8120
-
-    //readout
-    #define REG_EVENT_SIZE 0x814C
-    #define REG_READOUT_CONTROL 0xEF00
-    #define REG_READOUT_STATUS 0xEF04
-    #define REG_VME_ADDRESS_RELOCATION 0xEF10
-    #define REG_READOUT_BLT_AGGREGATE_NUMBER 0xEF1C
     
     public:
-        V1730(VMEBridge &_bridge, uint32_t _baseaddr);
+    
+        //system wide
+        static const uint32_t REG_CONFIG = 0x8000;
+        static const uint32_t REG_CONFIG_SET = 0x8004;
+        static const uint32_t REG_CONFIG_CLEAR = 0x8008;
+        static const uint32_t REG_BUFF_ORG = 0x800C;
+        static const uint32_t REG_FRONT_PANEL_CONTROL = 0x811C;
+        static const uint32_t REG_DUMMY = 0xEF20;
+        static const uint32_t REG_SOFTWARE_RESET = 0xEF24;
+        static const uint32_t REG_SOFTWARE_CLEAR = 0xEF28;
+        static const uint32_t REG_BOARD_CONFIGURATION_RELOAD = 0xEF34;
+
+        //per channel, or with = 0x0n00
+        static const uint32_t REG_RECORD_LENGTH = 0x1020;
+        static const uint32_t REG_DYNAMIC_RANGE = 0x1024;
+        static const uint32_t REG_NEV_AGGREGATE = 0x1034;
+        static const uint32_t REG_PRE_TRG = 0x1038;
+        static const uint32_t REG_SHORT_GATE = 0x1054;
+        static const uint32_t REG_LONG_GATE = 0x1058;
+        static const uint32_t REG_PRE_GATE = 0x105C;
+        static const uint32_t REG_DPP_TRG_THRESHOLD = 0x1060;
+        static const uint32_t REG_BASELINE_THRESHOLD = 0x1064;
+        static const uint32_t REG_SHAPED_TRIGGER_WIDTH = 0x1070;
+        static const uint32_t REG_TRIGGER_HOLDOFF = 0x1074;
+        static const uint32_t REG_DPP_CTRL = 0x1080;
+        static const uint32_t REG_TRIGGER_CTRL = 0x1084;
+        static const uint32_t REG_DC_OFFSET = 0x1098;
+        static const uint32_t REG_CHANNEL_TEMP = 0x10A8;
+
+        //acquisition 
+        static const uint32_t REG_ACQUISITION_CONTROL = 0x8100;
+        static const uint32_t REG_ACQUISITION_STATUS = 0x8104;
+        static const uint32_t REG_SOFTWARE_TRIGGER = 0x8108;
+        static const uint32_t REG_GLOBAL_TRIGGER_MASK = 0x810C;
+        static const uint32_t REG_TRIGGER_OUT_MASK = 0x8110;
+        static const uint32_t REG_CHANNEL_ENABLE_MASK = 0x8120;
+
+        //readout
+        static const uint32_t REG_EVENT_SIZE = 0x814C;
+        static const uint32_t REG_READOUT_CONTROL = 0xEF00;
+        static const uint32_t REG_READOUT_STATUS = 0xEF04;
+        static const uint32_t REG_VME_ADDRESS_RELOCATION = 0xEF10;
+        static const uint32_t REG_READOUT_BLT_AGGREGATE_NUMBER = 0xEF1C;
+        
+        V1730(VMEBridge &bridge, uint32_t baseaddr);
         
         virtual ~V1730();
         
