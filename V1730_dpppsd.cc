@@ -394,26 +394,30 @@ using namespace H5;
 
 void V1730Decoder::writeOut(H5File &file, size_t nEvents) {
 
-    for (size_t i = 0; i < nsamples.size(); i++) {
-        cout << "Dumping channel " << idx2chan[i] << "... ";
+    cout << "\t/" << settings.getIndex() << endl;
+
+    Group cardgroup = file.createGroup("/"+settings.getIndex());
+        
+    DataSpace scalar(0,NULL);
     
-        string groupname = "/ch" + to_string(idx2chan[i]);
-        Group group = file.createGroup(groupname);
+    double dval;
+    uint32_t ival;
+    
+    Attribute bits = cardgroup.createAttribute("bits",PredType::NATIVE_UINT32,scalar);
+    ival = 14;
+    bits.write(PredType::NATIVE_INT32,&ival);
+    
+    Attribute ns_sample = cardgroup.createAttribute("ns_sample",PredType::NATIVE_DOUBLE,scalar);
+    dval = 2.0;
+    ns_sample.write(PredType::NATIVE_DOUBLE,&dval);
+    
+    for (size_t i = 0; i < nsamples.size(); i++) {
+    
+        string chname = "ch" + to_string(idx2chan[i]);
+        Group group = cardgroup.createGroup(chname);
+        string groupname = "/"+settings.getIndex()+"/"+chname;
         
-        cout << "Attributes, ";
-        
-        DataSpace scalar(0,NULL);
-        
-        double dval;
-        uint32_t ival;
-        
-        Attribute bits = group.createAttribute("bits",PredType::NATIVE_UINT32,scalar);
-        ival = 14;
-        bits.write(PredType::NATIVE_INT32,&ival);
-        
-        Attribute ns_sample = group.createAttribute("ns_sample",PredType::NATIVE_DOUBLE,scalar);
-        dval = 2.0;
-        ns_sample.write(PredType::NATIVE_DOUBLE,&dval);
+        cout << "\t" << groupname << endl;
         
         Attribute offset = group.createAttribute("offset",PredType::NATIVE_UINT32,scalar);
         ival = settings.getDCOffset(idx2chan[i]);
@@ -438,34 +442,32 @@ void V1730Decoder::writeOut(H5File &file, size_t nEvents) {
         DataSpace samplespace(2, dimensions);
         DataSpace metaspace(1, dimensions);
         
-        cout << "Samples, ";
+        cout << "\t" << groupname << "/samples" << endl;
         DataSet samples_ds = file.createDataSet(groupname+"/samples", PredType::NATIVE_UINT16, samplespace);
         samples_ds.write(grabs[i], PredType::NATIVE_UINT16);
         memcpy(grabs[i],grabs[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
         
-        cout << "Baselines, ";
+        cout << "\t" << groupname << "/baselines" << endl;
         DataSet baselines_ds = file.createDataSet(groupname+"/baselines", PredType::NATIVE_UINT16, metaspace);
         baselines_ds.write(baselines[i], PredType::NATIVE_UINT16);
         memcpy(baselines[i],baselines[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
         
-        cout << "QShorts, ";
+        cout << "\t" << groupname << "/qshorts" << endl;
         DataSet qshorts_ds = file.createDataSet(groupname+"/qshorts", PredType::NATIVE_UINT16, metaspace);
         qshorts_ds.write(qshorts[i], PredType::NATIVE_UINT16);
         memcpy(qshorts[i],qshorts[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
         
-        cout << "QLongs, ";
+        cout << "\t" << groupname << "/qlongs" << endl;
         DataSet qlongs_ds = file.createDataSet(groupname+"/qlongs", PredType::NATIVE_UINT16, metaspace);
         qlongs_ds.write(qlongs[i], PredType::NATIVE_UINT16);
         memcpy(qlongs[i],qlongs[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
 
-        cout << "Times";
+        cout << "\t" << groupname << "/times" << endl;
         DataSet times_ds = file.createDataSet(groupname+"/times", PredType::NATIVE_UINT32, metaspace);
         times_ds.write(times[i], PredType::NATIVE_UINT32);
         memcpy(times[i],times[i]+nEvents,sizeof(uint32_t)*(grabbed[i]-nEvents));
         
         grabbed[i] -= nEvents;
-        
-        cout << endl;
     }
 }
 

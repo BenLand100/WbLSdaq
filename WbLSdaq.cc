@@ -32,6 +32,7 @@
 #include "V1742.hh"
 
 using namespace std;
+using namespace H5;
 
 bool running;
 
@@ -44,11 +45,14 @@ typedef struct {
     vector<Decoder*> *decoders;
     pthread_mutex_t *iomutex;
     pthread_cond_t *newdata;
+    size_t nEvents, nRepeat, curCycle;
+    string outfile;
 } decode_thread_data;
 
 void *decode_thread(void *_data) {
     signal(SIGINT,int_handler);
     decode_thread_data* data = (decode_thread_data*)_data;
+    data->curCycle = 0;
     try {
         while (running) {
             pthread_mutex_lock(data->iomutex);
@@ -60,9 +64,28 @@ void *decode_thread(void *_data) {
                 if (found) break;
                 pthread_cond_wait(data->newdata,data->iomutex);
             }
-            for (size_t i = 0; i < data->buffers->size(); i++) {
+            bool writeout = data->nEvents > 0;
+            for (size_t i = 0; i < data->decoders->size(); i++) {
                 size_t sz = (*data->buffers)[i]->fill();
                 if (sz > 0) (*data->decoders)[i]->decode(*(*data->buffers)[i]);
+                if ((*data->decoders)[i]->eventsReady() < data->nEvents) writeout = false;
+            }
+            if (data->nRepeat) cout << "Cycle " << data->curCycle+1 << " / " << data->nRepeat << endl;
+            if (writeout) {
+                Exception::dontPrint();
+                string fname = data->outfile;
+                if (data->nRepeat > 0) {
+                    fname += "." + to_string(data->curCycle);
+                    if (++data->curCycle == data->nRepeat) running = false;
+                } else {
+                    running = false;
+                }
+                fname += ".h5"; 
+                cout << "Saving data to " << fname << endl;
+                H5File file(fname, H5F_ACC_TRUNC);
+                for (size_t i = 0; i < data->decoders->size(); i++) {
+                    (*data->decoders)[i]->writeOut(file,data->nEvents);
+                }
             }
             pthread_mutex_unlock(data->iomutex);
         }
@@ -92,18 +115,16 @@ int main(int argc, char **argv) {
     db.addFile(argv[1]);
     RunTable run = db.getTable("RUN");
     
-    const int ngrabs = run["events"].cast<int>();
+    const int nEvents = run["events"].cast<int>();
     const string outfile = run["outfile"].cast<string>();
     const int linknum = run["link_num"].cast<int>();
     const int temptime = run["check_temps_every"].cast<int>();
-    /*
-    int nrepeat;
+    int nRepeat;
     if (run.isMember("repeat_times")) {
-        nrepeat = run["repeat_times"].cast<int>();
+        nRepeat = run["repeat_times"].cast<int>();
     } else {
-        nrepeat = 0;
+        nRepeat = 0;
     }
-    */
 
     cout << "Opening VME link..." << endl;
     
@@ -126,10 +147,10 @@ int main(int argc, char **argv) {
         settings.push_back(stngs);
         digitizers.push_back(new V1730(bridge,tbl["base_address"].cast<int>()));
         buffers.push_back(new Buffer(tbl["buffer_size"].cast<int>()*1024*1024));
-        if (!digitizers[i]->program(*settings[i])) return -1;
-        if (settings[i]->getIndex() == run["arm_last"].cast<string>()) arm_last = i;
+        if (!digitizers.back()->program(*stngs)) return -1;
+        if (stngs->getIndex() == run["arm_last"].cast<string>()) arm_last = i;
         // decoders need settings after programming
-        decoders.push_back(new V1730Decoder((size_t)(ngrabs*1.5),*stngs));
+        decoders.push_back(new V1730Decoder((size_t)(nEvents*1.5),*stngs));
     }
     
     vector<RunTable> v1742s = db.getGroup("V1742");
@@ -140,11 +161,13 @@ int main(int argc, char **argv) {
         settings.push_back(stngs);
         digitizers.push_back(new V1742(bridge,tbl["base_address"].cast<int>()));
         buffers.push_back(new Buffer(tbl["buffer_size"].cast<int>()*1024*1024));
-        if (!digitizers[i]->program(*settings[i])) return -1;
-        if (settings[i]->getIndex() == run["arm_last"].cast<string>()) arm_last = i;
+        if (!digitizers.back()->program(*stngs)) return -1;
+        if (stngs->getIndex() == run["arm_last"].cast<string>()) arm_last = i;
         // decoders need settings after programming
-        decoders.push_back(new V1742Decoder((size_t)(ngrabs*1.5),*stngs)); 
+        decoders.push_back(new V1742Decoder((size_t)(nEvents*1.5),*stngs)); 
     }
+    
+    usleep(100000); //let things settle
     
     cout << "Starting acquisition..." << endl;
     
@@ -165,61 +188,70 @@ int main(int argc, char **argv) {
     data.decoders = &decoders;
     data.iomutex = &iomutex;
     data.newdata = &newdata;
+    data.nEvents = nEvents;
+    data.nRepeat = nRepeat;
+    data.outfile = outfile;
     pthread_t decode;
     pthread_create(&decode,NULL,&decode_thread,&data);
     
     struct timespec last_temp_time, cur_time;
     clock_gettime(CLOCK_MONOTONIC,&last_temp_time);
     
-    //Readout loop
-    while (running) {
-    
-        //Digitizer loop
-        for (size_t i = 0; i < digitizers.size() && running; i++) {
-            Digitizer *dgtz = digitizers[i];
-            if (dgtz->readoutReady()) {
-                buffers[i]->inc(dgtz->readoutBLT(buffers[i]->wptr(),buffers[i]->free()));
-                pthread_cond_signal(&newdata);
-            }
-            if (!dgtz->acquisitionRunning()) {
-                pthread_mutex_lock(&iomutex);
-                cout << "Digitizer " << settings[i]->getIndex() << " aborted acquisition!" << endl;
-                pthread_mutex_unlock(&iomutex);
-                running = false;
-            }
-        }
+    try { 
+        while (running) {
         
-        //Temperature check
-        clock_gettime(CLOCK_MONOTONIC,&cur_time);
-        if (cur_time.tv_sec-last_temp_time.tv_sec > temptime) {
-            pthread_mutex_lock(&iomutex);
-            last_temp_time = cur_time;
-            cout << "Temperature check..." << endl;
-            bool overtemp = false;
+            //Digitizer loop
             for (size_t i = 0; i < digitizers.size() && running; i++) {
-                overtemp |= digitizers[i]->checkTemps(temps,60);
-                cout << settings[i]->getIndex() << " : [ " << temps[0];
-                for (size_t t = 1; t < temps.size(); t++) cout << ", " << temps[t];
-                cout << " ]" << endl;
+                Digitizer *dgtz = digitizers[i];
+                if (dgtz->readoutReady()) {
+                    buffers[i]->inc(dgtz->readoutBLT(buffers[i]->wptr(),buffers[i]->free()));
+                    pthread_cond_signal(&newdata);
+                }
+                if (!dgtz->acquisitionRunning()) {
+                    pthread_mutex_lock(&iomutex);
+                    cout << "Digitizer " << settings[i]->getIndex() << " aborted acquisition!" << endl;
+                    pthread_mutex_unlock(&iomutex);
+                    running = false;
+                }
             }
-            if (overtemp) {
-                cout << "Overtemp! Aborting readout." << endl;
-                running  = false;
+            
+            //Temperature check
+            clock_gettime(CLOCK_MONOTONIC,&cur_time);
+            if (cur_time.tv_sec-last_temp_time.tv_sec > temptime) {
+                pthread_mutex_lock(&iomutex);
+                last_temp_time = cur_time;
+                cout << "Temperature check..." << endl;
+                bool overtemp = false;
+                for (size_t i = 0; i < digitizers.size() && running; i++) {
+                    overtemp |= digitizers[i]->checkTemps(temps,60);
+                    cout << settings[i]->getIndex() << " : [ " << temps[0];
+                    for (size_t t = 1; t < temps.size(); t++) cout << ", " << temps[t];
+                    cout << " ]" << endl;
+                }
+                if (overtemp) {
+                    cout << "Overtemp! Aborting readout." << endl;
+                    running  = false;
+                }
+                pthread_mutex_unlock(&iomutex);
             }
-            pthread_mutex_unlock(&iomutex);
-        }
-    }
-    
-    digitizers[arm_last]->stopAcquisition();
-    for (size_t i = 0; i < digitizers.size(); i++) {
-        if (i == arm_last) continue;
-        digitizers[i]->stopAcquisition();
+        } 
+    } catch (exception &e) {
+        running = false;
+        pthread_mutex_unlock(&iomutex);
+        pthread_mutex_lock(&iomutex);
+        cout << "Readout thread aborted: " << e.what() << endl;
+        pthread_mutex_unlock(&iomutex);
     }
     
     pthread_mutex_lock(&iomutex);
     cout << "Stopping acquisition..." << endl;
     pthread_mutex_unlock(&iomutex);
     
+    digitizers[arm_last]->stopAcquisition();
+    for (size_t i = 0; i < digitizers.size(); i++) {
+        if (i == arm_last) continue;
+        digitizers[i]->stopAcquisition();
+    }
     pthread_cond_signal(&newdata);
     
     // Should add some logic to cleanup memory, but we're done anyway

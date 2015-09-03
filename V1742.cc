@@ -357,4 +357,53 @@ using namespace H5;
 
 void V1742Decoder::writeOut(H5File &file, size_t nEvents) {
 
+    cout << "\t/" << settings.getIndex() << endl;
+
+    Group cardgroup = file.createGroup("/"+settings.getIndex());
+        
+    DataSpace scalar(0,NULL);
+    
+    double dval;
+    uint32_t ival;
+    
+    Attribute bits = cardgroup.createAttribute("bits",PredType::NATIVE_UINT32,scalar);
+    ival = 12;
+    bits.write(PredType::NATIVE_INT32,&ival);
+    
+    Attribute ns_sample = cardgroup.createAttribute("ns_sample",PredType::NATIVE_DOUBLE,scalar);
+    dval = settings.nsPerSample();
+    ns_sample.write(PredType::NATIVE_DOUBLE,&dval);
+            
+    Attribute _samples = cardgroup.createAttribute("samples",PredType::NATIVE_UINT32,scalar);
+    ival = nSamples;
+    _samples.write(PredType::NATIVE_UINT32,&ival);
+    
+    for (size_t gr = 0; gr < 4; gr++) {
+        if (!grActive[gr]) continue;
+        for (size_t ch = 0; ch < 8; ch++) {
+            string grname = "ch" + to_string(ch+gr*8);
+            Group group = cardgroup.createGroup(grname);
+            string groupname = "/"+settings.getIndex()+"/"+grname;
+            
+            cout << "\t" << groupname << endl;
+        
+            Attribute offset = group.createAttribute("offset",PredType::NATIVE_UINT32,scalar);
+            ival = settings.getDCOffset(gr*8+ch);
+            offset.write(PredType::NATIVE_UINT32,&ival);
+
+            hsize_t dimensions[2];
+            dimensions[0] = nEvents;
+            dimensions[1] = nSamples;
+            
+            DataSpace samplespace(2, dimensions);
+            //DataSpace metaspace(1, dimensions);
+            
+            cout << "\t" << groupname << "/samples" << endl;
+            DataSet samples_ds = file.createDataSet(groupname+"/samples", PredType::NATIVE_UINT16, samplespace);
+            samples_ds.write(samples[gr][ch], PredType::NATIVE_UINT16);
+            memcpy(samples[gr][ch],samples[gr][ch]+nEvents,sizeof(uint16_t)*(grGrabbed[gr]-nEvents));
+        }
+        
+        grGrabbed[gr] -= nEvents;
+    }
 }

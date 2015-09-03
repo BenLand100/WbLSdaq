@@ -80,6 +80,19 @@ class V1742Settings : public DigitizerSettings  {
         inline bool getTRReadout() {
             return card.tr_readout;
         }
+        
+        inline double nsPerSample() {
+            switch (card.sample_freq) {
+                case 0: return 0.2;
+                case 1: return 0.4;
+                case 2: return 1.0;
+                default: throw std::runtime_error("Invalid custom_size");
+            }
+        }
+        
+        inline uint32_t getDCOffset(uint32_t ch) {
+            return card.dc_offset[ch];
+        }
     
     protected:
     
