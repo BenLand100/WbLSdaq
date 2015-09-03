@@ -15,29 +15,12 @@
  *  along with WbLSdaq. If not, see <http://www.gnu.org/licenses/>.
  */
  
-#include "Digitizer.hh"
+#include "VMECard.hh"
 
-    
-DigitizerSettings::DigitizerSettings(std::string _index) : index(_index) {
-
-}
-
-DigitizerSettings::~DigitizerSettings() {
+VMECard::VMECard(VMEBridge &_bridge, uint32_t _baseaddr) : bridge(_bridge), baseaddr(_baseaddr) {
 
 }
 
-Digitizer::Digitizer(VMEBridge &bridge, uint32_t baseaddr) : VMECard(bridge, baseaddr) {
+VMECard::~VMECard() {
 
-}
-
-Digitizer::~Digitizer() {
-
-}
-
-size_t Digitizer::readoutBLT(char *buffer, size_t buffer_size) {
-    size_t offset = 0, size = 0;
-    while (offset < buffer_size && (size = readBLT(0x0000, buffer+offset, 4093))) {
-        offset += size;
-    }
-    return offset;
 }

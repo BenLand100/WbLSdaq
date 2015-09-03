@@ -105,38 +105,38 @@ class V1742Settings : public DigitizerSettings  {
 class V1742 : public Digitizer {
 
     //system wide
-    static const uint32_t REG_GROUP_CONFIG = 0x8000;
-    static const uint32_t REG_CUSTOM_SIZE = 0x8020;
-    static const uint32_t REG_SAMPLE_FREQ = 0x80D8;
-    static const uint32_t REG_FRONT_PANEL_CONTROL = 0x811C;
-    static const uint32_t REG_DUMMY = 0xEF20;
-    static const uint32_t REG_SOFTWARE_RESET = 0xEF24;
-    static const uint32_t REG_SOFTWARE_CLEAR = 0xEF28;
-    static const uint32_t REG_BOARD_CONFIGURATION_RELOAD = 0xEF34;
+    static constexpr uint32_t REG_GROUP_CONFIG = 0x8000;
+    static constexpr uint32_t REG_CUSTOM_SIZE = 0x8020;
+    static constexpr uint32_t REG_SAMPLE_FREQ = 0x80D8;
+    static constexpr uint32_t REG_FRONT_PANEL_CONTROL = 0x811C;
+    static constexpr uint32_t REG_DUMMY = 0xEF20;
+    static constexpr uint32_t REG_SOFTWARE_RESET = 0xEF24;
+    static constexpr uint32_t REG_SOFTWARE_CLEAR = 0xEF28;
+    static constexpr uint32_t REG_BOARD_CONFIGURATION_RELOAD = 0xEF34;
     
     //per group, or with 0x0n00
-    static const uint32_t REG_GROUP_STATUS = 0x1088;
-    static const uint32_t REG_BUFFER_OCCUPANCY = 0x1094;
-    static const uint32_t REG_DC_OFFSET = 0x1098;
-    static const uint32_t REG_DC_SEL = 0x10A4;
-    static const uint32_t REG_DRS4_TEMP = 0x10A0;
-    static const uint32_t REG_TR_THRESHOLD = 0x10D4;
-    static const uint32_t REG_TR_DC_OFFSET = 0x10DC;
+    static constexpr uint32_t REG_GROUP_STATUS = 0x1088;
+    static constexpr uint32_t REG_BUFFER_OCCUPANCY = 0x1094;
+    static constexpr uint32_t REG_DC_OFFSET = 0x1098;
+    static constexpr uint32_t REG_DC_SEL = 0x10A4;
+    static constexpr uint32_t REG_DRS4_TEMP = 0x10A0;
+    static constexpr uint32_t REG_TR_THRESHOLD = 0x10D4;
+    static constexpr uint32_t REG_TR_DC_OFFSET = 0x10DC;
 
     //acquisition 
-    static const uint32_t REG_ACQUISITION_CONTROL = 0x8100;
-    static const uint32_t REG_ACQUISITION_STATUS = 0x8104;
-    static const uint32_t REG_SOFTWARE_TRIGGER = 0x8108;
-    static const uint32_t REG_TRIGGER_SOURCE = 0x810C;
-    static const uint32_t REG_POST_TRIGGER = 0x8114;
-    static const uint32_t REG_GROUP_ENABLE = 0x8120;
+    static constexpr uint32_t REG_ACQUISITION_CONTROL = 0x8100;
+    static constexpr uint32_t REG_ACQUISITION_STATUS = 0x8104;
+    static constexpr uint32_t REG_SOFTWARE_TRIGGER = 0x8108;
+    static constexpr uint32_t REG_TRIGGER_SOURCE = 0x810C;
+    static constexpr uint32_t REG_POST_TRIGGER = 0x8114;
+    static constexpr uint32_t REG_GROUP_ENABLE = 0x8120;
 
     //readout
-    static const uint32_t REG_EVENTS_STORED = 0x812C;
-    static const uint32_t REG_EVENT_SIZE = 0x814C;
-    static const uint32_t REG_READOUT_CONTROL = 0xEF00;
-    static const uint32_t REG_READOUT_STATUS = 0xEF04;
-    static const uint32_t REG_MAX_EVENT_BLT = 0xEF1C;
+    static constexpr uint32_t REG_EVENTS_STORED = 0x812C;
+    static constexpr uint32_t REG_EVENT_SIZE = 0x814C;
+    static constexpr uint32_t REG_READOUT_CONTROL = 0xEF00;
+    static constexpr uint32_t REG_READOUT_STATUS = 0xEF04;
+    static constexpr uint32_t REG_MAX_EVENT_BLT = 0xEF1C;
     
     public:
         V1742(VMEBridge &bridge, uint32_t baseaddr);
