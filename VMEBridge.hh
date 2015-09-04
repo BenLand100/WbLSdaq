@@ -46,9 +46,9 @@ class VMEBridge {
         }        
         
         inline uint32_t read32(uint32_t addr) {
-            uint32_t read;
-            usleep(1);
+            uint32_t read = 0;
             //std::cout << "\tread32@" << std::hex << addr << ':';
+            usleep(1);
             int res = CAENVME_ReadCycle(handle, addr, &read, cvA32_U_DATA, cvD32);
             if (res) {
                 std::stringstream err;
@@ -67,11 +67,13 @@ class VMEBridge {
                 err << error_codes[-res] << " :: write16 @ " << std::hex << addr << " : " << data;
                 throw std::runtime_error(err.str());
             }
+            usleep(10000);
         }        
         
         inline uint32_t read16(uint32_t addr) {
-            uint32_t read;
+            uint32_t read = 0;
             //std::cout << "\tread16@" << std::hex << addr << ':';
+            usleep(1);
             int res = CAENVME_ReadCycle(handle, addr, &read, cvA32_U_DATA, cvD16);
             if (res) {
                 std::stringstream err;
@@ -85,6 +87,7 @@ class VMEBridge {
         inline uint32_t readBLT(uint32_t addr, void *buffer, uint32_t size) {
             uint32_t bytes;
             //std::cout << "\tBLT@" << std::hex << addr << " for " << dec << size << endl;
+            usleep(1);
             int res = CAENVME_MBLTReadCycle(handle, addr, buffer, size, cvA32_U_MBLT, (int*)&bytes);
             if (res && (res != -1)) { //we ignore bus errors for BLT
                 std::stringstream err;

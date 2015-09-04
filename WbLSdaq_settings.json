@@ -1,8 +1,8 @@
 {
 name: "RUN",                    // run settings
 outfile: "test",                // file to save data to (appends .h5 automatically)
-events: 100,                    // number of events to grab per channel (0 -> inf)
-repeat_times: 5,                // number of times to repeat this run (nonzero appends .[number].h5 to outfile)
+events: 1000,                      // number of events to grab per channel (0 -> inf)
+repeat_times: 0,                // number of times to repeat this run (nonzero appends .[number].h5 to outfile)
 link_num: 0,                    // the nth V1718 connected to computer
 check_temps_every: 10,          // check temps of ADCs every X seconds 
 arm_last: "master",             // index of the digitizer to arm last (generates triggers)
@@ -12,6 +12,16 @@ arm_last: "master",             // index of the digitizer to arm last (generates
 name: "V65XX",                  // V6533 global settings
 index: "pos0",                  // To match card to subtables, data storage
 base_address: 0x22220000,       // hex address offset for VME
+//ch0: {
+//    enabled: true,              // Channel enable 
+//    v_set: 50.0,                // Voltage set point
+//    v_max: 2000.0,              // Max voltage
+//    i_max: 400.0,               // Max current
+//    r_up: 1,                    // V/s ramp up speed
+//    r_down: 50,                 // V/s ramp down speed
+//    trip: 5.0,                  // s to tolerate over current
+//    ramp_off: true,             // ramp down (true) or kill down (false)
+//},
 }
 
 {
@@ -23,7 +33,7 @@ base_address: 0x55550000,       // hex address offset for VME
 //    v_set: -50.0,               // Voltage set point
 //    v_max: -1000.0,             // Max voltage
 //    i_max: 400.0,               // Max current
-//    r_up: 10,                   // V/s ramp up speed
+//    r_up: 1,                    // V/s ramp up speed
 //    r_down: 50,                 // V/s ramp down speed
 //    trip: 5.0,                  // s to tolerate over current
 //    ramp_off: true,             // ramp down (true) or kill down (false)
@@ -52,7 +62,7 @@ index: "master",                // master channel specific settings
 enabled: true,                  // record events from this channel
 request_global_trigger: true,   // send global trigger request on local trigger
 request_trig_out: true,         // send trigger out request on local trigger
-record_length: 50,              // samples to acquire per trigger
+record_length: 500,             // samples to acquire per trigger
 dc_offset: 0,                   // volts to shift the input by (-1V to 1V)
 baseline_average: 2,            // Choose index [fixed,16,64,256,1024] samples to average baseline
 pulse_polarity: 1,              // Choose index [POSITIVE, NEGATIVE] direction of pulses to trigger on
@@ -105,8 +115,8 @@ tr0_threshold: 0x6666,          // TR0 trigger threshold (see docs)
 tr0_dc_offset: 0x8000,          // TR0 dc offset added to signal (see docs)
 tr1_threshold: 0x6666,          // TR0 trigger threshold (see docs)
 tr1_dc_offset: 0x8000,          // TR0 dc offset added to signal (see docs)
-num_samples: 3,                 // Choose index [1024, 520, 256, 136]
-sample_freq: 0,                 // Choose index [5 GHz, 2.5 GHz, 1 GHz]
+num_samples: 0,                 // Choose index [1024, 520, 256, 136]
+sample_freq: 2,                 // Choose index [5 GHz, 2.5 GHz, 1 GHz]
 software_trigger: false,        // Global trigger on software trigger
 external_trigger: true,         // Global trigger on software trigger
 trigger_offset: 1,              // Multiples of 8.5ns to wait after trigger before digitizing samples

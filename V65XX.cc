@@ -28,12 +28,9 @@ V65XX::V65XX(VMEBridge &bridge, uint32_t baseaddr) : VMECard(bridge,baseaddr) {
     nChans = read16(REG_NUM_CHANS);
     vmax = read16(REG_BOARD_VMAX);
     imax = read16(REG_BOARD_IMAX);
-    cout << hex << baseaddr << dec << ' '<< nChans << ' '<< imax << ' '<< vmax << endl;
-    nChans = 6;
     positive.resize(nChans);
     for (uint32_t ch = 0; ch < nChans; ch++) {
         positive[ch] = read16((0x80*(ch+1))|REG_POLARITY);
-        cout << positive[ch] << endl;
     }
 }
         
@@ -103,7 +100,7 @@ void V65XX::setVSet(uint32_t ch, double V) {
     if (ch >= nChans) throw runtime_error("Cannot setVSet on ch " + to_string(ch) + " - channel out of range.");
     if (positive[ch] && V < 0.0) throw runtime_error("Trying to set negative voltage on a positive channel.");
     if (!positive[ch] && V > 0.0) throw runtime_error("Trying to set positive voltage on a negative channel.");
-    uint32_t data = round(abs(V)*VRES);
+    uint32_t data = round(abs(V)/VRES);
     if (data > 40000)  throw runtime_error("Voltage " + to_string(V) + " out of bounds");
     write16((0x80*(ch+1))|REG_VSET,data);
 }
@@ -111,7 +108,7 @@ void V65XX::setVSet(uint32_t ch, double V) {
 void V65XX::setIMax(uint32_t ch, double uA) {
     if (ch >= nChans) throw runtime_error("Cannot setIMax on ch " + to_string(ch) + " - channel out of range.");
     if (uA < 0.0) throw runtime_error("IMax must be positive");
-    uint32_t data = round(uA*IRESH);
+    uint32_t data = round(uA/IRESH);
     if (data > 62000)  throw runtime_error("IMax " + to_string(uA) + " out of bounds");
     write16((0x80*(ch+1))|REG_IMAX,data);
 }
@@ -120,7 +117,7 @@ void V65XX::setVMax(uint32_t ch, double V) {
     if (ch >= nChans) throw runtime_error("Cannot setVmax on ch " + to_string(ch) + " - channel out of range.");
     if (positive[ch] && V < 0.0) throw runtime_error("Trying to set negative VMax on a positive channel.");
     if (!positive[ch] && V > 0.0) throw runtime_error("Trying to set positive VMax on a negative channel.");
-    uint32_t data = round(abs(V)*VRES);
+    uint32_t data = round(abs(V)/VRES);
     if (data > 40000)  throw runtime_error("VMax " + to_string(V) + " out of bounds");
     write16((0x80*(ch+1))|REG_VMAX,data);
 }
@@ -133,7 +130,7 @@ void V65XX::setEnabled(uint32_t ch, bool on) {
 void V65XX::setTripTime(uint32_t ch, double s) {
     if (ch >= nChans) throw runtime_error("Cannot setTripTime on ch " + to_string(ch) + " - channel out of range.");
     if (s < 0.0) throw runtime_error("TripTime must be positive");
-    uint32_t data = round(s*TRES);
+    uint32_t data = round(s/TRES);
     if (data > 10000)  throw runtime_error("TripTime " + to_string(s) + " out of bounds");
     write16((0x80*(ch+1))|REG_TRIP_TIME,data);
 }
