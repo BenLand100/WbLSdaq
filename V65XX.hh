@@ -86,13 +86,15 @@ class V65XX : public VMECard {
         
         bool isHVOn();
         
-        bool isStable();
+        bool isBusy();
+        
+        bool isWarning();
         
         void powerDown();
         
         void kill();
         
-        void setV(uint32_t ch, double V);
+        void setVSet(uint32_t ch, double V);
         void setIMax(uint32_t ch, double uA);
         void setVMax(uint32_t ch, double V);
         void setEnabled(uint32_t ch, bool on);
@@ -102,6 +104,7 @@ class V65XX : public VMECard {
         void setDownMode(uint32_t ch, bool ramp);
         void setIMonRange(uint32_t ch, bool low);
         
+        double getVSet(uint32_t ch);
         double getV(uint32_t ch);
         double getI(uint32_t ch);
         double getIMax(uint32_t ch);
@@ -110,11 +113,11 @@ class V65XX : public VMECard {
         double getTripTime(uint32_t ch);
         uint32_t getDownRate(uint32_t ch);
         uint32_t getUpRate(uint32_t ch);
-        bool getDownMode(uint32_t ch);
-        bool getIMonRange(uint32_t ch);
         int getTemp(uint32_t ch);
         uint32_t getStatus(uint32_t ch);
         
+        bool isIMonLow(uint32_t ch);
+        bool isDownModeLow(uint32_t ch);
         bool isPositive(uint32_t ch);
         bool isOn(uint32_t ch);
         bool isBusy(uint32_t ch);

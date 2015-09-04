@@ -262,8 +262,6 @@ uint32_t* V1742Decoder::decode_event_structure(uint32_t *event) {
     }
     if ((event[0] & 0xF0000000) != 0xA0000000) 
         throw runtime_error("Event structure missing tag");
-        
-    event_counter++;
     
     uint32_t size = event[0] & 0xFFFFFFF;
     
@@ -274,9 +272,22 @@ uint32_t* V1742Decoder::decode_event_structure(uint32_t *event) {
     */
     
     uint32_t mask = event[1] & 0xF;
-    uint32_t counter = event[2] & 0x3FFFFF;
+    uint32_t trigger_count = event[2] & 0x3FFFFF;
     
-    if (event_counter != counter) throw runtime_error(settings.getIndex() + " missed an event!");
+    if (event_counter++) {
+        if (trigger_count == trigger_last) {
+            cout << "****" << settings.getIndex() << " duplicate trigger " << trigger_count << endl;
+        } else if (trigger_count < trigger_last) {
+            cout << "****" << settings.getIndex() << " orphaned trigger " << trigger_count << endl;
+        } else if (trigger_count != trigger_last + 1) { 
+            cout << "****" << settings.getIndex() << " missed " << trigger_count-trigger_last-1 << " triggers" << endl;
+            trigger_last = trigger_count;
+        } else {
+            trigger_last = trigger_count;
+        }
+    } else {
+        trigger_last = trigger_count;
+    }
     
     uint32_t *groups = event+4;
     

@@ -30,6 +30,7 @@
 #include "VMEBridge.hh"
 #include "V1730_dpppsd.hh"
 #include "V1742.hh"
+#include "V65XX.hh"
 
 using namespace std;
 using namespace H5;
@@ -130,6 +131,18 @@ int main(int argc, char **argv) {
     
     VMEBridge bridge(linknum,0);
     
+    cout << "Setting up V65XX HV..." << endl;
+    
+    vector<V65XX*> hvs;
+    
+    vector<RunTable> v65XXs = db.getGroup("V65XX");
+    for (size_t i = 0; i < v65XXs.size(); i++) {
+        RunTable &tbl = v65XXs[i];
+        cout << "\t" << tbl["index"].cast<string>() << endl;
+        hvs.push_back(new V65XX(bridge,tbl["base_address"].cast<int>()));
+        hvs.back()->set(tbl);
+    }
+    
     cout << "Setting up digitizers..." << endl;
     
     vector<DigitizerSettings*> settings;
@@ -167,7 +180,23 @@ int main(int argc, char **argv) {
         decoders.push_back(new V1742Decoder((size_t)(nEvents*1.5),*stngs)); 
     }
     
-    usleep(100000); //let things settle
+    cout << "Waiting for HV to stabilize..." << endl;
+    
+    while (running) {
+        bool busy = false;
+        bool warning = false;
+        for (size_t i = 0; i < hvs.size(); i++) {
+             busy |= hvs[i]->isBusy();
+             warning  |= hvs[i]->isWarning();
+        }
+        if (!busy) break;
+        if (warning) {
+            cout << "HV reports issues, aborting run..." << endl;
+            return -1;
+        }
+        usleep(1000000);
+    }
+    
     
     cout << "Starting acquisition..." << endl;
     

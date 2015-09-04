@@ -64,10 +64,9 @@ class VMEBridge {
             int res = CAENVME_WriteCycle(handle, addr, &data, cvA32_U_DATA, cvD16);
             if (res) {
                 std::stringstream err;
-                err << error_codes[-res] << " :: write32 @ " << std::hex << addr << " : " << data;
+                err << error_codes[-res] << " :: write16 @ " << std::hex << addr << " : " << data;
                 throw std::runtime_error(err.str());
             }
-            usleep(10000);
         }        
         
         inline uint32_t read16(uint32_t addr) {
@@ -76,7 +75,7 @@ class VMEBridge {
             int res = CAENVME_ReadCycle(handle, addr, &read, cvA32_U_DATA, cvD16);
             if (res) {
                 std::stringstream err;
-                err << error_codes[-res] << " :: read32 @ " << std::hex << addr;
+                err << error_codes[-res] << " :: read16 @ " << std::hex << addr;
                 throw std::runtime_error(err.str());
             }
             //std::cout << read << dec << endl;

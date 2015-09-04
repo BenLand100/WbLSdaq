@@ -179,6 +179,8 @@ class V1742Decoder : public Decoder {
         size_t decode_size;
         size_t group_counter,event_counter,decode_counter;
         
+        uint32_t trigger_last;
+        
         uint32_t nSamples;
         bool grActive[4];
         size_t grGrabbed[4];

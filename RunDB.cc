@@ -66,9 +66,11 @@ bool RunDB::groupExists(string name) {
 }
 
 vector<RunTable> RunDB::getGroup(string name) {
-    if (!db.count(name)) throw runtime_error("No group found: " + name);
-    map<string,RunTable> &dbgroup = db[name];
     vector<RunTable> group;
+    if (!db.count(name)) {
+        return group;
+    }
+    map<string,RunTable> &dbgroup = db[name];
     for (map<string,RunTable>::iterator iter = dbgroup.begin(); iter != dbgroup.end(); iter++) {
         group.push_back(iter->second);
     }

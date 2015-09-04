@@ -1,7 +1,7 @@
 {
 name: "RUN",                    // run settings
 outfile: "test",                // file to save data to (appends .h5 automatically)
-events: 100,                     // number of events to grab per channel (0 -> inf)
+events: 100,                    // number of events to grab per channel (0 -> inf)
 repeat_times: 5,                // number of times to repeat this run (nonzero appends .[number].h5 to outfile)
 link_num: 0,                    // the nth V1718 connected to computer
 check_temps_every: 10,          // check temps of ADCs every X seconds 
@@ -9,59 +9,25 @@ arm_last: "master",             // index of the digitizer to arm last (generates
 }
 
 {
-name: "V6533",                  // V6533 global settings
+name: "V65XX",                  // V6533 global settings
 index: "pos0",                  // To match card to subtables, data storage
 base_address: 0x22220000,       // hex address offset for VME
-off_at_end: false,              // ramp down to 0V after run
-voltages: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // Voltage set points
-v_max: [2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0], // Max voltages
-i_max: [400.0, 400.0, 400.0, 400.0, 400.0, 400.0], // Max current
-r_up: [10.0, 10.0, 10.0, 10.0, 10.0, 10.0], // V/s ramp up speed
-r_down: [50.0, 50.0, 50.0, 50.0, 50.0, 50.0], // V/s ramp down speed
-trip: [5.0, 5.0, 5.0, 5.0, 5.0, 5.0], // s to tolerate over current
-ramp_off: [true, true, true, true, true, true], // ramp down (true) or kill down (false)
 }
 
 {
-name: "V6533",                  // V6533 global settings
-index: "pos1",                  // To match card to subtables, data storage
-base_address: 0x33330000,       // hex address offset for VME
-off_at_end: false,              // ramp down to 0V after run
-voltages: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // Voltage set points
-v_max: [2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0], // Max voltages
-i_max: [400.0, 400.0, 400.0, 400.0, 400.0, 400.0], // Max current
-r_up: [10.0, 10.0, 10.0, 10.0, 10.0, 10.0], // V/s ramp up speed
-r_down: [50.0, 50.0, 50.0, 50.0, 50.0, 50.0], // V/s ramp down speed
-trip: [5.0, 5.0, 5.0, 5.0, 5.0, 5.0], // s to tolerate over current
-ramp_off: [true, true, true, true, true, true], // ramp down (true) or kill down (false)
-}
-
-{
-name: "V6533",                  // V6533 global settings
+name: "V65XX",                  // V6533 global settings
 index: "neg0",                  // To match card to subtables, data storage
 base_address: 0x55550000,       // hex address offset for VME
-off_at_end: false,              // ramp down to 0V after run
-voltages: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // Voltage set points
-v_max: [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0], // Max voltages
-i_max: [400.0, 400.0, 400.0, 400.0, 400.0, 400.0], // Max current
-r_up: [10.0, 10.0, 10.0, 10.0, 10.0, 10.0], // V/s ramp up speed
-r_down: [50.0, 50.0, 50.0, 50.0, 50.0, 50.0], // V/s ramp down speed
-trip: [5.0, 5.0, 5.0, 5.0, 5.0, 5.0], // s to tolerate over current
-ramp_off: [true, true, true, true, true, true], // ramp down (true) or kill down (false)
-}
-
-{
-name: "V6533",                  // V6533 global settings
-index: "neg1",                  // To match card to subtables, data storage
-base_address: 0x66660000,       // hex address offset for VME
-off_at_end: false,              // ramp down to 0V after run
-voltages: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // Voltage set points
-v_max: [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0], // Max voltages
-i_max: [400.0, 400.0, 400.0, 400.0, 400.0, 400.0], // Max current
-r_up: [10.0, 10.0, 10.0, 10.0, 10.0, 10.0], // V/s ramp up speed
-r_down: [50.0, 50.0, 50.0, 50.0, 50.0, 50.0], // V/s ramp down speed
-trip: [5.0, 5.0, 5.0, 5.0, 5.0, 5.0], // s to tolerate over current
-ramp_off: [true, true, true, true, true, true], // ramp down (true) or kill down (false)
+//ch0: {
+//    enabled: true,              // Channel enable 
+//    v_set: -50.0,               // Voltage set point
+//    v_max: -1000.0,             // Max voltage
+//    i_max: 400.0,               // Max current
+//    r_up: 10,                   // V/s ramp up speed
+//    r_down: 50,                 // V/s ramp down speed
+//    trip: 5.0,                  // s to tolerate over current
+//    ramp_off: true,             // ramp down (true) or kill down (false)
+//},
 }
 
 {
