@@ -145,6 +145,7 @@ void V1730Settings::chanDefaults(uint32_t ch) {
     chans[ch].dc_offset = 0x8000; // 16 bit (-1V to 1V)
 }
 
+
 V1730::V1730(VMEBridge &_bridge, uint32_t _baseaddr) : Digitizer(_bridge,_baseaddr) {
 
 }
@@ -152,10 +153,6 @@ V1730::V1730(VMEBridge &_bridge, uint32_t _baseaddr) : Digitizer(_bridge,_basead
 V1730::~V1730() {
     //Fully reset the board just in case
     write32(REG_BOARD_CONFIGURATION_RELOAD,0);
-}
-
-void V1730::calib() {
-    write32(REG_CHANNEL_CALIB,0xAAAAAAAA);
 }
 
 bool V1730::program(DigitizerSettings &_settings) {
@@ -514,6 +511,8 @@ uint32_t* V1730Decoder::decode_chan_agg(uint32_t *chanagg, uint32_t group) {
             const size_t ev = grabbed[idx]++;
             if (ev == eventBuffer) throw runtime_error("Decoder buffer for " + settings.getIndex() + " overflowed!");
             uint16_t *data = grabs[idx] + ev*len;
+            
+            cout << ev << ' ' << ev*len << ' ' << data-grabs[idx] << endl;
             
             for (uint32_t *word = event+1, sample = 0; sample < len; word++, sample+=2) {
                 data[sample+0] = *word & 0x3FFF;

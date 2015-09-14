@@ -167,6 +167,7 @@ class V1730 : public Digitizer {
         static constexpr uint32_t REG_CONFIG_SET = 0x8004;
         static constexpr uint32_t REG_CONFIG_CLEAR = 0x8008;
         static constexpr uint32_t REG_BUFF_ORG = 0x800C;
+        static constexpr uint32_t REG_CHANNEL_CALIB = 0x809C;
         static constexpr uint32_t REG_FRONT_PANEL_CONTROL = 0x811C;
         static constexpr uint32_t REG_DUMMY = 0xEF20;
         static constexpr uint32_t REG_SOFTWARE_RESET = 0xEF24;
@@ -209,6 +210,8 @@ class V1730 : public Digitizer {
         
         virtual ~V1730();
         
+        virtual void calib();
+
         virtual bool program(DigitizerSettings &settings);
         
         virtual void startAcquisition();
