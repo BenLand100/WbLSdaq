@@ -1,7 +1,7 @@
 {
 name: "RUN",                    // run settings
-outfile: "test",                // file to save data to (appends .h5 automatically)
-events: 1000,                      // number of events to grab per channel (0 -> inf)
+outfile: "pulsegen",                // file to save data to (appends .h5 automatically)
+events: 10,                      // number of events to grab per channel (0 -> inf)
 repeat_times: 0,                // number of times to repeat this run (nonzero appends .[number].h5 to outfile)
 link_num: 0,                    // the nth V1718 connected to computer
 check_temps_every: 10,          // check temps of ADCs every X seconds 
@@ -65,10 +65,10 @@ request_trig_out: true,         // send trigger out request on local trigger
 record_length: 500,             // samples to acquire per trigger
 dc_offset: 0,                   // volts to shift the input by (-1V to 1V)
 baseline_average: 2,            // Choose index [fixed,16,64,256,1024] samples to average baseline
-pulse_polarity: 1,              // Choose index [POSITIVE, NEGATIVE] direction of pulses to trigger on
+pulse_polarity: 0,              // Choose index [POSITIVE, NEGATIVE] direction of pulses to trigger on
 trigger_threshold: 100,         // counts past baseline to trigger
 self_trigger: false,            // local trigger triggers local acquisition
-pre_trigger: 50,                // samples to acquire before the trigger
+pre_trigger: 250,               // samples to acquire before the trigger
 gate_offset: 10,                // samples before the trigger to start gates
 short_gate: 50,                 // short integration window
 long_gate: 100,                 // long integration window
@@ -86,7 +86,7 @@ index: "master",                // master channel specific settings
 enabled: false,                 // record events from this channel
 request_global_trigger: false,  // send global trigger request on local trigger
 request_trig_out: false,        // send trigger out request on local trigger
-record_length: 50,              // samples to acquire per trigger
+record_length: 500,             // samples to acquire per trigger
 dc_offset: 0,                   // volts to shift the input by (-1V to 1V)
 baseline_average: 2,            // Choose index [fixed,16,64,256,1024] samples to average baseline
 pulse_polarity: 0,              // Choose index [POSITIVE, NEGATIVE] direction of pulses to trigger on

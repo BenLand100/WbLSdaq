@@ -159,6 +159,7 @@ int main(int argc, char **argv) {
         V1730Settings *stngs = new V1730Settings(tbl,db);
         settings.push_back(stngs);
         digitizers.push_back(new V1730(bridge,tbl["base_address"].cast<int>()));
+        ((V1730*)digitizers.back())->calib();
         buffers.push_back(new Buffer(tbl["buffer_size"].cast<int>()*1024*1024));
         if (!digitizers.back()->program(*stngs)) return -1;
         if (stngs->getIndex() == run["arm_last"].cast<string>()) arm_last = i;

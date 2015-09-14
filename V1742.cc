@@ -208,6 +208,9 @@ V1742Decoder::V1742Decoder(size_t _eventBuffer, V1742Settings &_settings) : even
                 for (size_t ch = 0; ch < 8; ch++) {
                     samples[gr][ch] = new uint16_t[eventBuffer*nSamples];
                 }
+                start_index[gr] = new uint16_t[eventBuffer];
+                trigger_count[gr] = new uint32_t[eventBuffer];
+                trigger_time[gr] = new uint32_t[eventBuffer];
             }
         } else {
             grActive[gr] = false;
@@ -233,6 +236,9 @@ V1742Decoder::~V1742Decoder() {
                 for (size_t ch = 0; ch < 8; ch++) {
                     delete [] samples[gr][ch];
                 }
+                delete [] start_index[gr];
+                delete [] trigger_count[gr];
+                delete [] trigger_time[gr];
             }
         }
         if (trActive[0]) delete [] tr_samples[0];
@@ -268,31 +274,37 @@ uint32_t* V1742Decoder::decode_event_structure(uint32_t *event) {
     /*
     uint32_t board_id = (event[1] & 0xF800000000) >> 27;
     uint32_t pattern = (event[1] & 0x3FFF00) >> 8;
-    uint32_t timetag = event[3];
     */
     
     uint32_t mask = event[1] & 0xF;
-    uint32_t trigger_count = event[2] & 0x3FFFFF;
+    uint32_t count = event[2] & 0x3FFFFF;
+    uint32_t timetag = event[3];
     
     if (event_counter++) {
-        if (trigger_count == trigger_last) {
-            cout << "****" << settings.getIndex() << " duplicate trigger " << trigger_count << endl;
-        } else if (trigger_count < trigger_last) {
-            cout << "****" << settings.getIndex() << " orphaned trigger " << trigger_count << endl;
-        } else if (trigger_count != trigger_last + 1) { 
-            cout << "****" << settings.getIndex() << " missed " << trigger_count-trigger_last-1 << " triggers" << endl;
-            trigger_last = trigger_count;
+        if (count == trigger_last) {
+            cout << "****" << settings.getIndex() << " duplicate trigger " << count << endl;
+        } else if (count < trigger_last) {
+            cout << "****" << settings.getIndex() << " orphaned trigger " << count << endl;
+        } else if (count != trigger_last + 1) { 
+            cout << "****" << settings.getIndex() << " missed " << count-trigger_last-1 << " triggers" << endl;
+            trigger_last = count;
         } else {
-            trigger_last = trigger_count;
+            trigger_last = count;
         }
     } else {
-        trigger_last = trigger_count;
+        trigger_last = count;
     }
     
     uint32_t *groups = event+4;
     
     for (uint32_t gr = 0; gr < 4; gr++) {
         if (mask & (1 << gr)) {
+            if (eventBuffer) {
+                size_t ev = grGrabbed[gr]++;
+                if (ev == eventBuffer) throw runtime_error("Decoder buffer for " + settings.getIndex() + " overflowed!");
+                trigger_time[gr][ev] = timetag;
+                trigger_count[gr][ev] = count;
+            }
             groups = decode_group_structure(groups,gr);
         }
     } 
@@ -305,7 +317,7 @@ uint32_t* V1742Decoder::decode_group_structure(uint32_t *group, uint32_t gr) {
 
     if (!grActive[gr]) throw runtime_error("Recieved group data for inactive group (" + to_string(gr) + ")");
     
-    //uint32_t cell_index = (group[0] & 0x3FF00000) >> 20;
+    uint32_t cell_index = (group[0] & 0x3FF00000) >> 20;
     //uint32_t freq = (group[0] >> 16) & 0x3;
     
     uint32_t tr = (group[0] >> 12) & 0x1;
@@ -317,8 +329,9 @@ uint32_t* V1742Decoder::decode_group_structure(uint32_t *group, uint32_t gr) {
     group_counter++;
     
     if (eventBuffer) {
-        size_t ev = grGrabbed[gr]++;
-        if (ev == eventBuffer) throw runtime_error("Decoder buffer for " + settings.getIndex() + " overflowed!");
+        size_t ev = grGrabbed[gr]-1;
+        
+        start_index[gr][ev] = cell_index;
         
         uint32_t *word = group+1;
         uint16_t *data[8];
@@ -391,29 +404,51 @@ void V1742Decoder::writeOut(H5File &file, size_t nEvents) {
     
     for (size_t gr = 0; gr < 4; gr++) {
         if (!grActive[gr]) continue;
-        for (size_t ch = 0; ch < 8; ch++) {
-            string grname = "ch" + to_string(ch+gr*8);
-            Group group = cardgroup.createGroup(grname);
-            string groupname = "/"+settings.getIndex()+"/"+grname;
-            
-            cout << "\t" << groupname << endl;
+        string grname = "gr" + to_string(gr);
+        Group grgroup = cardgroup.createGroup(grname);
+        string grgroupname = "/"+settings.getIndex()+"/"+grname;
         
-            Attribute offset = group.createAttribute("offset",PredType::NATIVE_UINT32,scalar);
+        cout << "\t" << grgroupname << endl;
+
+        hsize_t dimensions[2];
+        dimensions[0] = nEvents;
+        dimensions[1] = nSamples;
+        
+        DataSpace samplespace(2, dimensions);
+        DataSpace metaspace(1, dimensions);
+        
+        for (size_t ch = 0; ch < 8; ch++) {
+            string chname = "ch" + to_string(ch);
+            Group chgroup = grgroup.createGroup(chname);
+            string chgroupname = "/"+settings.getIndex()+"/"+grname+"/"+chname;
+            
+            cout << "\t" << chgroupname << endl;
+        
+            Attribute offset = chgroup.createAttribute("offset",PredType::NATIVE_UINT32,scalar);
             ival = settings.getDCOffset(gr*8+ch);
             offset.write(PredType::NATIVE_UINT32,&ival);
-
-            hsize_t dimensions[2];
-            dimensions[0] = nEvents;
-            dimensions[1] = nSamples;
             
-            DataSpace samplespace(2, dimensions);
-            //DataSpace metaspace(1, dimensions);
-            
-            cout << "\t" << groupname << "/samples" << endl;
-            DataSet samples_ds = file.createDataSet(groupname+"/samples", PredType::NATIVE_UINT16, samplespace);
+            cout << "\t" << chgroupname << "/samples" << endl;
+            DataSet samples_ds = file.createDataSet(chgroupname+"/samples", PredType::NATIVE_UINT16, samplespace);
             samples_ds.write(samples[gr][ch], PredType::NATIVE_UINT16);
             memcpy(samples[gr][ch],samples[gr][ch]+nEvents,sizeof(uint16_t)*(grGrabbed[gr]-nEvents));
+            
         }
+            
+        cout << "\t" << grgroupname << "/start_index" << endl;
+        DataSet start_index_ds = file.createDataSet(grgroupname+"/start_index", PredType::NATIVE_UINT16, metaspace);
+        start_index_ds.write(start_index[gr], PredType::NATIVE_UINT16);
+        memcpy(start_index[gr],start_index[gr]+nEvents,sizeof(uint16_t)*(grGrabbed[gr]-nEvents));
+            
+        cout << "\t" << grgroupname << "/trigger_time" << endl;
+        DataSet trigger_time_ds = file.createDataSet(grgroupname+"/trigger_time", PredType::NATIVE_UINT32, metaspace);
+        trigger_time_ds.write(trigger_time[gr], PredType::NATIVE_UINT32);
+        memcpy(trigger_time[gr],trigger_time[gr]+nEvents,sizeof(uint32_t)*(grGrabbed[gr]-nEvents));
+        
+        cout << "\t" << grgroupname << "/trigger_count" << endl;
+        DataSet trigger_count_ds = file.createDataSet(grgroupname+"/trigger_count", PredType::NATIVE_UINT32, metaspace);
+        trigger_count_ds.write(trigger_count[gr], PredType::NATIVE_UINT32);
+        memcpy(trigger_count[gr],trigger_count[gr]+nEvents,sizeof(uint32_t)*(grGrabbed[gr]-nEvents));
         
         grGrabbed[gr] -= nEvents;
     }
