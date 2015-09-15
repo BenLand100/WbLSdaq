@@ -18,6 +18,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <ctime>
 
 #include "VMEBridge.hh"
 #include "Digitizer.hh"
@@ -254,6 +255,7 @@ class V1730Decoder : public Decoder {
         size_t boardagg_counter;
         
         size_t decode_size;
+        struct timespec last_decode_time;
         
         std::map<uint32_t,uint32_t> chan2idx,idx2chan;
         std::vector<size_t> nsamples;

@@ -357,6 +357,8 @@ V1730Decoder::V1730Decoder(size_t _eventBuffer, V1730Settings &_settings) : even
             }
         }
     }
+    
+    clock_gettime(CLOCK_MONOTONIC,&last_decode_time);
 
 }
 
@@ -380,8 +382,13 @@ void V1730Decoder::decode(Buffer &buf) {
     buf.dec(decode_size);
     decode_counter++;
     
+    struct timespec cur_time;
+    clock_gettime(CLOCK_MONOTONIC,&cur_time);
+    double time_int = (cur_time.tv_sec - last_decode_time.tv_sec)+1e-9*(cur_time.tv_nsec - last_decode_time.tv_nsec);
+    last_decode_time = cur_time;
+    
     for (size_t i = 0; i < idx2chan.size(); i++) {
-        cout << "\tch" << idx2chan[i] << "\tev: " << grabbed[i]-lastgrabbed[i] /*<< " / " << lastgrabbed[i]/time_int << " Hz"*/ << endl;
+        cout << "\tch" << idx2chan[i] << "\tev: " << grabbed[i]-lastgrabbed[i] << " / " << (grabbed[i]-lastgrabbed[i])/time_int << " Hz / " << grabbed[i] << " total" << endl;
     }
 }
 

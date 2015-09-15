@@ -227,6 +227,8 @@ V1742Decoder::V1742Decoder(size_t _eventBuffer, V1742Settings &_settings) : even
         trActive[0] = trActive[1] = false;
     }
     
+    clock_gettime(CLOCK_MONOTONIC,&last_decode_time);
+    
 }
 
 V1742Decoder::~V1742Decoder() {
@@ -257,8 +259,13 @@ void V1742Decoder::decode(Buffer &buffer) {
     buffer.dec(decode_size);
     decode_counter++;
     
+    struct timespec cur_time;
+    clock_gettime(CLOCK_MONOTONIC,&cur_time);
+    double time_int = (cur_time.tv_sec - last_decode_time.tv_sec)+1e-9*(cur_time.tv_nsec - last_decode_time.tv_nsec);
+    last_decode_time = cur_time;
+    
     for (size_t gr = 0; gr < 4; gr++) {
-        if (grActive[gr]) cout << "\tgr" << gr << "\tev: " << grGrabbed[gr]-lastgrabbed[gr] /*<< " / " << (grGrabbed[gr]-lastgrabbed[gr])/time_int << " Hz"*/ << endl;
+        if (grActive[gr]) cout << "\tgr" << gr << "\tev: " << grGrabbed[gr]-lastgrabbed[gr] << " / " << (grGrabbed[gr]-lastgrabbed[gr])/time_int << " Hz / " << grGrabbed[gr] << " total " << endl;
     }
 }
     

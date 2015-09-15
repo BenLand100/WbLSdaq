@@ -54,6 +54,8 @@ void *decode_thread(void *_data) {
     signal(SIGINT,int_handler);
     decode_thread_data* data = (decode_thread_data*)_data;
     data->curCycle = 0;
+    struct timespec cur_time, last_time;
+    clock_gettime(CLOCK_MONOTONIC,&last_time);
     try {
         while (running) {
             pthread_mutex_lock(data->iomutex);
@@ -66,12 +68,21 @@ void *decode_thread(void *_data) {
                 pthread_cond_wait(data->newdata,data->iomutex);
             }
             bool writeout = data->nEvents > 0;
+            size_t total = 0;
             for (size_t i = 0; i < data->decoders->size(); i++) {
                 size_t sz = (*data->buffers)[i]->fill();
                 if (sz > 0) (*data->decoders)[i]->decode(*(*data->buffers)[i]);
-                if ((*data->decoders)[i]->eventsReady() < data->nEvents) writeout = false;
+                size_t ev = (*data->decoders)[i]->eventsReady();
+                if (ev < data->nEvents) writeout = false;
+                total += ev;
             }
+            
             if (data->nRepeat) cout << "Cycle " << data->curCycle+1 << " / " << data->nRepeat << endl;
+            
+            clock_gettime(CLOCK_MONOTONIC,&cur_time);
+            double time_int = (cur_time.tv_sec - last_time.tv_sec)+1e-9*(cur_time.tv_nsec - last_time.tv_nsec);
+            cout << "Avg rate " << ((double)total/data->decoders->size())/time_int << " Hz" << endl;
+            
             if (writeout) {
                 Exception::dontPrint();
                 string fname = data->outfile;
@@ -87,6 +98,7 @@ void *decode_thread(void *_data) {
                 for (size_t i = 0; i < data->decoders->size(); i++) {
                     (*data->decoders)[i]->writeOut(file,data->nEvents);
                 }
+                last_time = cur_time;
             }
             pthread_mutex_unlock(data->iomutex);
         }
