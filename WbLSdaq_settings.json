@@ -55,14 +55,21 @@ trig_out_majority_level: 0,     // trig_out_majority_level+1 requests required f
 aggregates_per_transfer: 5,     // maximum board aggregates to read out during a single transfer
 }
 
+{
+name: "GR0",                    // channel 0 and 1 common settings
+local_logic: 3,                 // what to propagate as trigger requests [AND, EVEN, ODD, OR]
+valid_logic: 3,                 // how to validate a local trigger [AND, MOTHER, COUPLE, OR]
+request_global_trigger: true,   // send global trigger request on local trigger
+request_trig_out: true,         // send trigger out request on local trigger
+record_length: 500,             // samples to acquire per trigger
+events_per_buffer: 5,           // events per readout buffer
+}
+
 // duplicate this table for having multiple channels active (change index)
 {
 name: "CH0",                    // for channel 0
 index: "master",                // master channel specific settings
 enabled: true,                  // record events from this channel
-request_global_trigger: true,   // send global trigger request on local trigger
-request_trig_out: true,         // send trigger out request on local trigger
-record_length: 500,             // samples to acquire per trigger
 dc_offset: 0,                   // volts to shift the input by (-1V to 1V)
 baseline_average: 2,            // Choose index [fixed,16,64,256,1024] samples to average baseline
 pulse_polarity: 0,              // Choose index [POSITIVE, NEGATIVE] direction of pulses to trigger on
@@ -76,7 +83,6 @@ charge_sensitivity: 2,          // Choose index [5fC,20fC,80fC,320fC,1280fC] for
 shaped_trigger_width: 10,       // number of samples to send trigger request after trigger
 trigger_holdoff: 100,           // inhibit triggers for this many samples after trigger
 trigger_type: 0,                // Choose index [Normal, Coincidence, RESERVED, Anti-coincidence] how to handle trigger validation
-events_per_buffer: 5,           // events per readout buffer
 }
 
 // duplicate this table for having multiple channels active (change index)
@@ -84,9 +90,6 @@ events_per_buffer: 5,           // events per readout buffer
 name: "CH1",                    // for channel 1
 index: "master",                // master channel specific settings
 enabled: false,                 // record events from this channel
-request_global_trigger: false,  // send global trigger request on local trigger
-request_trig_out: false,        // send trigger out request on local trigger
-record_length: 500,             // samples to acquire per trigger
 dc_offset: 0,                   // volts to shift the input by (-1V to 1V)
 baseline_average: 2,            // Choose index [fixed,16,64,256,1024] samples to average baseline
 pulse_polarity: 0,              // Choose index [POSITIVE, NEGATIVE] direction of pulses to trigger on
@@ -100,7 +103,6 @@ charge_sensitivity: 2,          // Choose index [5fC,20fC,80fC,320fC,1280fC] for
 shaped_trigger_width: 10,       // number of samples to send trigger request after trigger
 trigger_holdoff: 50,            // inhibit triggers for this many samples after trigger
 trigger_type: 0,                // Choose index [Normal, Coincidence, RESERVED, Anti-coincidence] how to handle trigger validation
-events_per_buffer: 5,           // events per readout buffer
 }
 
 {

@@ -65,6 +65,22 @@ V1730Settings::V1730Settings(RunTable &digitizer, RunDB &db) : DigitizerSettings
     card.max_board_agg_blt = digitizer["aggregates_per_transfer"].cast<int>(); 
     
     for (int ch = 0; ch < 16; ch++) {
+        if (ch%2 == 0) {
+            string grname = "GR"+to_string(ch/2);
+            if (!db.tableExists(grname,index)) {
+                groupDefaults(ch/2);
+            } else {
+                RunTable group = db.getTable(grname,index);
+                
+                groups[ch/2].local_logic = group["local_logic"].cast<int>(); // 2 bit (see docs)
+                groups[ch/2].valid_logic = group["valid_logic"].cast<int>(); // 2 bit (see docs)
+                groups[ch/2].global_trigger = group["request_global_trigger"].cast<bool>() ? 1 : 0; // 1 bit
+                groups[ch/2].trg_out = group["request_trig_out"].cast<bool>() ? 1 : 0; // 1 bit
+                groups[ch/2].record_length = group["record_length"].cast<int>(); // 16* bit
+                groups[ch/2].ev_per_buffer = group["events_per_buffer"].cast<int>(); // 10 bit
+            
+            }
+        }
         string chname = "CH"+to_string(ch);
         if (!db.tableExists(chname,index)) {
             chanDefaults(ch);
@@ -75,9 +91,6 @@ V1730Settings::V1730Settings(RunTable &digitizer, RunDB &db) : DigitizerSettings
             chans[ch].fixed_baseline = 0; // 12 bit
             
             chans[ch].enabled = channel["enabled"].cast<bool>() ? 1 : 0; //1 bit
-            chans[ch].global_trigger = channel["request_global_trigger"].cast<bool>() ? 1 : 0; // 1 bit
-            chans[ch].trg_out = channel["request_trig_out"].cast<bool>() ? 1 : 0; // 1 bit
-            chans[ch].record_length = channel["record_length"].cast<int>(); // 16* bit
             chans[ch].dc_offset = round((channel["dc_offset"].cast<double>()+1.0)/2.0*pow(2.0,16.0)); // 16 bit (-1V to 1V)
             chans[ch].baseline_mean = channel["baseline_average"].cast<int>(); // 3 bit (fixed,16,64,256,1024)
             chans[ch].pulse_polarity = channel["pulse_polarity"].cast<int>(); // 1 bit (0->positive, 1->negative)
@@ -91,7 +104,6 @@ V1730Settings::V1730Settings(RunTable &digitizer, RunDB &db) : DigitizerSettings
             chans[ch].shaped_trigger_width = channel["shaped_trigger_width"].cast<int>(); // 10 bit
             chans[ch].trigger_holdoff = channel["trigger_holdoff"].cast<int>(); // 10* bit
             chans[ch].trigger_config = channel["trigger_type"].cast<int>(); // 2 bit (see docs)
-            chans[ch].ev_per_buffer = channel["events_per_buffer"].cast<int>(); // 10 bit
         }
     }
 }
@@ -103,12 +115,10 @@ V1730Settings::~V1730Settings() {
 void V1730Settings::validate() { //FIXME validate bit fields too
     for (int ch = 0; ch < 16; ch++) {
         if (ch % 2 == 0) {
-            if (chans[ch].record_length > 65535) throw runtime_error("Number of samples exceeds 65535 (ch " + to_string(ch) + ")");
-        } else {
-            if (chans[ch].record_length != chans[ch-1].record_length) throw runtime_error("Record length is not the same between pairs (ch " + to_string(ch) + ")"); 
+            if (groups[ch/2].record_length > 65535) throw runtime_error("Number of samples exceeds 65535 (gr " + to_string(ch/2) + ")");
+            if (groups[ch/2].ev_per_buffer < 2) throw runtime_error("Number of events per channel buffer must be at least 2 (gr " + to_string(ch/2) + ")");
+            if (groups[ch/2].ev_per_buffer > 1023) throw runtime_error("Number of events per channel buffer exceeds 1023 (gr " + to_string(ch/2) + ")");
         }
-        if (chans[ch].ev_per_buffer < 2) throw runtime_error("Number of events per channel buffer must be at least 2 (ch " + to_string(ch) + ")");
-        if (chans[ch].ev_per_buffer > 1023) throw runtime_error("Number of events per channel buffer exceeds 1023 (ch " + to_string(ch) + ")");
         if (chans[ch].pre_trigger > 2044) throw runtime_error("Pre trigger samples exceeds 2044 (ch " + to_string(ch) + ")");
         if (chans[ch].short_gate > 4095) throw runtime_error("Short gate samples exceeds 4095 (ch " + to_string(ch) + ")");
         if (chans[ch].long_gate > 4095) throw runtime_error("Long gate samples exceeds 4095 (ch " + to_string(ch) + ")");
@@ -124,11 +134,7 @@ void V1730Settings::validate() { //FIXME validate bit fields too
 
 void V1730Settings::chanDefaults(uint32_t ch) {
     chans[ch].enabled = 0; //1 bit
-    chans[ch].global_trigger = 0; // 1 bit
-    chans[ch].trg_out = 0; // 1 bit
-    chans[ch].record_length = 200; // 16* bit
     chans[ch].dynamic_range = 0; // 1 bit
-    chans[ch].ev_per_buffer = 50; // 10 bit
     chans[ch].pre_trigger = 30; // 9* bit
     chans[ch].long_gate = 20; // 12 bit
     chans[ch].short_gate = 10; // 12 bit
@@ -143,6 +149,15 @@ void V1730Settings::chanDefaults(uint32_t ch) {
     chans[ch].baseline_mean = 3; // 3 bit (fixed,16,64,256,1024)
     chans[ch].self_trigger = 1; // 1 bit (0->enabled, 1->disabled)
     chans[ch].dc_offset = 0x8000; // 16 bit (-1V to 1V)
+}
+
+void V1730Settings::groupDefaults(uint32_t gr) {
+    groups[gr].local_logic = 3; // 2 bit
+    groups[gr].valid_logic = 3; // 2 bit
+    groups[gr].global_trigger = 0; // 1 bit
+    groups[gr].trg_out = 0; // 1 bit
+    groups[gr].record_length = 200; // 16* bit
+    groups[gr].ev_per_buffer = 50; // 10 bit
 }
 
 V1730::V1730(VMEBridge &_bridge, uint32_t _baseaddr) : Digitizer(_bridge,_baseaddr) {
@@ -173,8 +188,16 @@ bool V1730::program(DigitizerSettings &_settings) {
     //Fully reset the board just in case
     write32(REG_BOARD_CONFIGURATION_RELOAD,0);
     
-    //Set TTL logic levels, ignore LVDS and debug settings
-    write32(REG_FRONT_PANEL_CONTROL,1);
+    //Front panel config
+    data = (1<<0) //ttl
+         | (1<<2) | (1<<3) | (1<<4) | (1<<5) //LVDS output
+         | (1<<6) // programed IO
+         | (1<<8); // new features
+    write32(REG_FRONT_PANEL_CONTROL,data);
+    
+    //LVDS new features config
+    data = (1<<0) | (1<<4) | (1<<8) | (1<<12); //trg-out mode on all
+    write32(REG_LVDS_NEW_FEATURES,data);
 
     data = (1 << 4) 
          | (1 << 8) 
@@ -202,43 +225,23 @@ bool V1730::program(DigitizerSettings &_settings) {
     //keep track of the size of the buffers for each memory location
     uint32_t buffer_sizes[8] = { 0, 0, 0, 0, 0, 0, 0, 0}; //in locations
 
-    //keep track of how to config the local triggers
-    uint32_t local_logic[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-
     for (int ch = 0; ch < 16; ch++) {
         channel_enable_mask |= (settings.chans[ch].enabled << ch);
-        global_trigger_mask |= (settings.chans[ch].global_trigger << (ch/2));
-        trigger_out_mask |= (settings.chans[ch].trg_out << (ch/2));
         
-        if (ch % 2 == 0) { //memory shared between pairs
-        
-            if (settings.chans[ch].global_trigger) {
-                if (settings.chans[ch+1].global_trigger) {
-                    local_logic[ch/2] = 3;
-                } else {
-                    local_logic[ch/2] = 1;
-                }
-            } else {
-                if (settings.chans[ch+1].global_trigger) {
-                    local_logic[ch/2] = 2;
-                } else {
-                    local_logic[ch/2] = 0;
-                }
-            }
+        if (ch % 2 == 0) { 
+            global_trigger_mask |= (settings.groups[ch/2].global_trigger << (ch/2));
+            trigger_out_mask |= (settings.groups[ch/2].trg_out << (ch/2));
             
-            data = settings.chans[ch].record_length%8 ?  settings.chans[ch].record_length/8+1 : settings.chans[ch].record_length/8;
+            data = settings.groups[ch/2].record_length%8 ?  settings.groups[ch/2].record_length/8+1 : settings.groups[ch/2].record_length/8;
             write32(REG_RECORD_LENGTH|(ch<<8),data);
-            settings.chans[ch].record_length = read32(REG_RECORD_LENGTH|(ch<<8))*8;
-        } else {
-            settings.chans[ch].record_length = settings.chans[ch-1].record_length;
-            settings.chans[ch].ev_per_buffer = settings.chans[ch-1].ev_per_buffer;
+            settings.groups[ch/2].record_length = read32(REG_RECORD_LENGTH|(ch<<8))*8;
         }
         
         if (settings.chans[ch].enabled) {
-            buffer_sizes[ch/2] = (2 + settings.chans[ch].record_length/8)*settings.chans[ch].ev_per_buffer;
+            buffer_sizes[ch/2] = (2 + settings.groups[ch/2].record_length/8)*settings.groups[ch/2].ev_per_buffer;
         }
         
-        write32(REG_NEV_AGGREGATE|(ch<<8),settings.chans[ch].ev_per_buffer);
+        write32(REG_NEV_AGGREGATE|(ch<<8),settings.groups[ch/2].ev_per_buffer);
         write32(REG_PRE_TRG|(ch<<8),settings.chans[ch].pre_trigger/4);
         write32(REG_SHORT_GATE|(ch<<8),settings.chans[ch].short_gate);
         write32(REG_LONG_GATE|(ch<<8),settings.chans[ch].long_gate);
@@ -253,7 +256,10 @@ bool V1730::program(DigitizerSettings &_settings) {
              | (settings.chans[ch].baseline_mean << 20)
              | (settings.chans[ch].self_trigger << 24);
         write32(REG_DPP_CTRL|(ch<<8),data);
-        data = local_logic[ch/2] | (1<<2);
+        data = (settings.groups[ch/2].local_logic<<0) 
+             | (1<<2) // enable request logic
+             | (settings.groups[ch/2].valid_logic<<4)
+             | (1<<6); // enable valid logic
         write32(REG_TRIGGER_CTRL|(ch<<8),data);
         write32(REG_DC_OFFSET|(ch<<8),settings.chans[ch].dc_offset);
         

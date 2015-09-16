@@ -33,20 +33,8 @@ typedef struct {
     //REG_CHANNEL_ENABLE_MASK
     uint32_t enabled; // 1 bit
     
-    //REG_GLOBAL_TRIGGER_MASK
-    uint32_t global_trigger; // 1 bit
-    
-    //REG_TRIGGER_OUT_MASK
-    uint32_t trg_out; // 1 bit
-    
-    //REG_RECORD_LENGTH
-    uint32_t record_length; // 16* bit
-    
     //REG_DYNAMIC_RANGE
     uint32_t dynamic_range; // 1 bit
-    
-    //REG_NEV_AGGREGATE
-    uint32_t ev_per_buffer; // 10 bit
     
     //REG_PRE_TRG
     uint32_t pre_trigger; // 9* bit
@@ -83,6 +71,26 @@ typedef struct {
     uint32_t dc_offset; // 16 bit (-1V to 1V)
 
 } V1730_chan_config;
+
+typedef struct {
+
+    //REG_LOCAL_TRIGGER_MANAGEMENT
+    uint32_t local_logic; // 2 bit [AND, EVEN, ODD, OR]
+    uint32_t valid_logic; // 2 bit [AND, MOTHER, COUPLE, OR]
+    
+    //REG_GLOBAL_TRIGGER_MASK
+    uint32_t global_trigger; // 1 bit
+    
+    //REG_TRIGGER_OUT_MASK
+    uint32_t trg_out; // 1 bit
+    
+    //REG_RECORD_LENGTH
+    uint32_t record_length; // 16* bit
+    
+    //REG_NEV_AGGREGATE
+    uint32_t ev_per_buffer; // 10 bit
+
+} V1730_group_config;
 
 typedef struct {
 
@@ -131,7 +139,7 @@ class V1730Settings : public DigitizerSettings {
         }
         
         inline uint32_t getRecordLength(uint32_t ch) {
-            return chans[ch].record_length;
+            return groups[ch/2].record_length;
         }
         
         inline uint32_t getDCOffset(uint32_t ch) {
@@ -153,9 +161,12 @@ class V1730Settings : public DigitizerSettings {
     protected:
     
         V1730_card_config card;
+        V1730_group_config groups[8];
         V1730_chan_config chans[16];
         
         void chanDefaults(uint32_t ch);
+        
+        void groupDefaults(uint32_t gr);
         
 };
 
@@ -170,6 +181,7 @@ class V1730 : public Digitizer {
         static constexpr uint32_t REG_BUFF_ORG = 0x800C;
         static constexpr uint32_t REG_CHANNEL_CALIB = 0x809C;
         static constexpr uint32_t REG_FRONT_PANEL_CONTROL = 0x811C;
+        static constexpr uint32_t REG_LVDS_NEW_FEATURES = 0x81A0;
         static constexpr uint32_t REG_DUMMY = 0xEF20;
         static constexpr uint32_t REG_SOFTWARE_RESET = 0xEF24;
         static constexpr uint32_t REG_SOFTWARE_CLEAR = 0xEF28;
