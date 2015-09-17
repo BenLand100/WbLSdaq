@@ -57,6 +57,7 @@ aggregates_per_transfer: 5,     // maximum board aggregates to read out during a
 
 {
 name: "GR0",                    // channel 0 and 1 common settings
+index: "master",                // master channel specific settings
 local_logic: 3,                 // what to propagate as trigger requests [AND, EVEN, ODD, OR]
 valid_logic: 3,                 // how to validate a local trigger [AND, MOTHER, COUPLE, OR]
 request_global_trigger: true,   // send global trigger request on local trigger

@@ -62,6 +62,7 @@ V1742Settings::V1742Settings(RunTable &dgtz, RunDB &db) : DigitizerSettings(dgtz
         if (!db.tableExists(grname,index)) {
             groupDefaults(gr);
         } else {
+            cout << "\t" << grname << endl;
             RunTable group = db.getTable(grname,index);
             card.group_enable[gr] = group["enabled"].cast<bool>() ? 1 : 0; //1 bit bool
             vector<double> offsets = group["dc_offsets"].toVector<double>();

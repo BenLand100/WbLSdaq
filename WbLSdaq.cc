@@ -95,9 +95,17 @@ void *decode_thread(void *_data) {
                 fname += ".h5"; 
                 cout << "Saving data to " << fname << endl;
                 H5File file(fname, H5F_ACC_TRUNC);
+                
+                DataSpace scalar(0,NULL);
+                Group root = file.openGroup("/");
+                
+                Attribute runtime = root.createAttribute("runtime",PredType::NATIVE_DOUBLE,scalar);
+                runtime.write(PredType::NATIVE_DOUBLE,&time_int);
+                
                 for (size_t i = 0; i < data->decoders->size(); i++) {
                     (*data->decoders)[i]->writeOut(file,data->nEvents);
                 }
+                
                 last_time = cur_time;
             }
             pthread_mutex_unlock(data->iomutex);

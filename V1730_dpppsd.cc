@@ -53,8 +53,8 @@ V1730Settings::V1730Settings(RunTable &digitizer, RunDB &db) : DigitizerSettings
     card.oscilloscope_mode = 1; // 1 bit
     card.digital_virt_probe_1 = 0; // 3 bit (see docs)
     card.digital_virt_probe_2 = 0; // 3 bit (see docs)
-    card.coincidence_window = 1; // 3 bit
     
+    card.coincidence_window = digitizer["coincidence_window"].cast<int>(); // 3 bit
     card.global_majority_level = digitizer["global_majority_level"].cast<int>(); // 3 bit
     card.external_global_trigger = digitizer["external_trigger_enable"].cast<bool>() ? 1 : 0; // 1 bit
     card.software_global_trigger = digitizer["software_trigger_enable"].cast<bool>() ? 1 : 0; // 1 bit
@@ -70,6 +70,7 @@ V1730Settings::V1730Settings(RunTable &digitizer, RunDB &db) : DigitizerSettings
             if (!db.tableExists(grname,index)) {
                 groupDefaults(ch/2);
             } else {
+                cout << "\t" << grname << endl;
                 RunTable group = db.getTable(grname,index);
                 
                 groups[ch/2].local_logic = group["local_logic"].cast<int>(); // 2 bit (see docs)
@@ -85,6 +86,7 @@ V1730Settings::V1730Settings(RunTable &digitizer, RunDB &db) : DigitizerSettings
         if (!db.tableExists(chname,index)) {
             chanDefaults(ch);
         } else {
+            cout << "\t" << chname << endl;
             RunTable channel = db.getTable(chname,index);
     
             chans[ch].dynamic_range = 0; // 1 bit
@@ -235,6 +237,8 @@ bool V1730::program(DigitizerSettings &_settings) {
             data = settings.groups[ch/2].record_length%8 ?  settings.groups[ch/2].record_length/8+1 : settings.groups[ch/2].record_length/8;
             write32(REG_RECORD_LENGTH|(ch<<8),data);
             settings.groups[ch/2].record_length = read32(REG_RECORD_LENGTH|(ch<<8))*8;
+        } else {
+            write32(REG_RECORD_LENGTH|(ch<<8),settings.groups[ch/2].record_length/8);
         }
         
         if (settings.chans[ch].enabled) {
