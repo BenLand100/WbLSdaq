@@ -273,7 +273,7 @@ class V1730Decoder : public Decoder {
         std::vector<size_t> nsamples;
         std::vector<size_t> grabbed;
         std::vector<uint16_t*> grabs, baselines, qshorts, qlongs;
-        std::vector<uint32_t*> times;
+        std::vector<uint64_t*> times;
 
         uint32_t* decode_chan_agg(uint32_t *chanagg, uint32_t group);
 

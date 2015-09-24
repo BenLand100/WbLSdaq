@@ -263,7 +263,7 @@ bool V1730::program(DigitizerSettings &_settings) {
         data = (settings.groups[ch/2].local_logic<<0) 
              | (1<<2) // enable request logic
              | (settings.groups[ch/2].valid_logic<<4)
-             | (1<<6); // enable valid logic
+             | (0<<6); // enable valid logic
         write32(REG_TRIGGER_CTRL|(ch<<8),data);
         write32(REG_DC_OFFSET|(ch<<8),settings.chans[ch].dc_offset);
         
@@ -363,7 +363,7 @@ V1730Decoder::V1730Decoder(size_t _eventBuffer, V1730Settings &_settings) : even
                 baselines.push_back(new uint16_t[eventBuffer]);
                 qshorts.push_back(new uint16_t[eventBuffer]);
                 qlongs.push_back(new uint16_t[eventBuffer]);
-                times.push_back(new uint32_t[eventBuffer]);
+                times.push_back(new uint64_t[eventBuffer]);
             }
         }
     }
@@ -483,9 +483,9 @@ void V1730Decoder::writeOut(H5File &file, size_t nEvents) {
         memcpy(qlongs[i],qlongs[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
 
         cout << "\t" << groupname << "/times" << endl;
-        DataSet times_ds = file.createDataSet(groupname+"/times", PredType::NATIVE_UINT32, metaspace);
-        times_ds.write(times[i], PredType::NATIVE_UINT32);
-        memcpy(times[i],times[i]+nEvents,sizeof(uint32_t)*(grabbed[i]-nEvents));
+        DataSet times_ds = file.createDataSet(groupname+"/times", PredType::NATIVE_UINT64, metaspace);
+        times_ds.write(times[i], PredType::NATIVE_UINT64);
+        memcpy(times[i],times[i]+nEvents,sizeof(uint64_t)*(grabbed[i]-nEvents));
         
         grabbed[i] -= nEvents;
     }
@@ -545,7 +545,7 @@ uint32_t* V1730Decoder::decode_chan_agg(uint32_t *chanagg, uint32_t group) {
             //uint16_t extratime = (event[1+samples/2+0] >> 16) & 0xFFFF;
             qshorts[idx][ev] = event[1+samples/2+1] & 0x7FFF;
             qlongs[idx][ev] = (event[1+samples/2+1] >> 16) & 0xFFFF;
-            times[idx][ev] = event[0] & 0x7FFFFFFF;
+            times[idx][ev] = ((uint64_t)(event[0] & 0x7FFFFFFF)) | (((uint64_t)(event[1+samples/2+0]&0xFFFF))<<15);
         } else {
             grabbed[idx]++;
         }
