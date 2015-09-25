@@ -63,7 +63,7 @@ typedef struct {
     //REG_DPP_CTRL
     uint32_t charge_sensitivity; // 3 bit (see docs)
     uint32_t pulse_polarity; // 1 bit (0->positive, 1->negative)
-    uint32_t trigger_config; // 2 bit (see docs)
+    uint32_t trigger_config; // 2 bit (normal, coincidence, reserved, anticoincidence)
     uint32_t baseline_mean; // 3 bit (fixed, 16, 64, 256, 1024)
     uint32_t self_trigger; // 1 bit (0->enabled, 1->disabled)
     
@@ -83,6 +83,11 @@ typedef struct {
     
     //REG_TRIGGER_OUT_MASK
     uint32_t trg_out; // 1 bit
+    
+    //REG_LOCAL_VALIDATION
+    uint32_t valid_mask; // 8 bit
+    uint32_t valid_mode; // 2 bit (or, and, majority)
+    uint32_t valid_majority; // 3 bit
     
     //REG_RECORD_LENGTH
     uint32_t record_length; // 16* bit
@@ -203,6 +208,9 @@ class V1730 : public Digitizer {
         static constexpr uint32_t REG_TRIGGER_CTRL = 0x1084;
         static constexpr uint32_t REG_DC_OFFSET = 0x1098;
         static constexpr uint32_t REG_CHANNEL_TEMP = 0x10A8;
+        
+        //per couple, add 4*couple 
+        static constexpr uint32_t REG_LOCAL_VALIDATION = 0x8180; 
 
         //acquisition 
         static constexpr uint32_t REG_ACQUISITION_CONTROL = 0x8100;

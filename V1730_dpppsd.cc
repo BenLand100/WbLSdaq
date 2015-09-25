@@ -77,6 +77,13 @@ V1730Settings::V1730Settings(RunTable &digitizer, RunDB &db) : DigitizerSettings
                 groups[ch/2].valid_logic = group["valid_logic"].cast<int>(); // 2 bit (see docs)
                 groups[ch/2].global_trigger = group["request_global_trigger"].cast<bool>() ? 1 : 0; // 1 bit
                 groups[ch/2].trg_out = group["request_trig_out"].cast<bool>() ? 1 : 0; // 1 bit
+                groups[ch/2].valid_mask = 0;
+                vector<bool> mask = group["validation_mask"].toVector<bool>();
+                for (size_t i = 0; i < mask.size(); i++) {
+                    groups[ch/2].valid_mask |= (mask[i] ? 1 : 0) << i;
+                }
+                groups[ch/2].valid_mode = group["validation_mode"].cast<int>(); // 2 bit
+                groups[ch/2].valid_majority = group["validation_majority_level"].cast<int>(); // 3 bit
                 groups[ch/2].record_length = group["record_length"].cast<int>(); // 16* bit
                 groups[ch/2].ev_per_buffer = group["events_per_buffer"].cast<int>(); // 10 bit
             
@@ -192,23 +199,24 @@ bool V1730::program(DigitizerSettings &_settings) {
     
     //Front panel config
     data = (1<<0) //ttl
-         | (1<<2) | (1<<3) | (1<<4) | (1<<5) //LVDS output
+         | (1<<2) | (1<<3) | (1<<4) | (0<<5) //LVDS (output,output,output,input)
          | (1<<6) // programed IO
          | (1<<8); // new features
     write32(REG_FRONT_PANEL_CONTROL,data);
     
     //LVDS new features config
-    data = (1<<0) | (1<<4) | (1<<8) | (1<<12); //trg-out mode on all
+    data = (1<<0) | (1<<4) | (2<<8) | (2<<12); //(trigger,trigger,status,status)
     write32(REG_LVDS_NEW_FEATURES,data);
 
-    data = (1 << 4) 
-         | (1 << 8) 
+    data = (1 << 2) //individual trigger propagation
+         | (1 << 4) //reserved
+         | (1 << 8) //individual trigger (reserved)
          | (settings.card.dual_trace << 11) 
          | (settings.card.analog_probe << 12) 
          | (settings.card.oscilloscope_mode << 16) 
-         | (1 << 17) 
-         | (1 << 18)
-         | (1 << 19)
+         | (1 << 17) //enable extras
+         | (1 << 18) //time stamp (reserved)
+         | (1 << 19) //charge record (reserved)
          | (settings.card.digital_virt_probe_1 << 23)
          | (settings.card.digital_virt_probe_2 << 26);
     write32(REG_CONFIG,data);
@@ -237,6 +245,11 @@ bool V1730::program(DigitizerSettings &_settings) {
             data = settings.groups[ch/2].record_length%8 ?  settings.groups[ch/2].record_length/8+1 : settings.groups[ch/2].record_length/8;
             write32(REG_RECORD_LENGTH|(ch<<8),data);
             settings.groups[ch/2].record_length = read32(REG_RECORD_LENGTH|(ch<<8))*8;
+            
+            data = settings.groups[ch/2].valid_mask
+                 | (settings.groups[ch/2].valid_mode << 8)
+                 | (settings.groups[ch/2].valid_majority << 10);
+            write32(REG_LOCAL_VALIDATION+(ch/2*4),data);
         } else {
             write32(REG_RECORD_LENGTH|(ch<<8),settings.groups[ch/2].record_length/8);
         }
@@ -263,7 +276,7 @@ bool V1730::program(DigitizerSettings &_settings) {
         data = (settings.groups[ch/2].local_logic<<0) 
              | (1<<2) // enable request logic
              | (settings.groups[ch/2].valid_logic<<4)
-             | (0<<6); // enable valid logic
+             | (1<<6); // enable valid logic
         write32(REG_TRIGGER_CTRL|(ch<<8),data);
         write32(REG_DC_OFFSET|(ch<<8),settings.chans[ch].dc_offset);
         
