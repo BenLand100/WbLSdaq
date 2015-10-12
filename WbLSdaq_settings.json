@@ -1,11 +1,20 @@
 {
 name: "RUN",                    // run settings
-outfile: "pulsegen",                // file to save data to (appends .h5 automatically)
-events: 10,                      // number of events to grab per channel (0 -> inf)
+outfile: "pulsegen",            // file to save data to (appends .h5 automatically)
+events: 0,                      // number of events to grab per channel (0 -> inf)
 repeat_times: 0,                // number of times to repeat this run (nonzero appends .[number].h5 to outfile)
 link_num: 0,                    // the nth V1718 connected to computer
 check_temps_every: 10,          // check temps of ADCs every X seconds 
 arm_last: "master",             // index of the digitizer to arm last (generates triggers)
+}
+
+{
+name: "LECROY6ZI",              // For LeCroy oscilloscopes using VICP remote protocol
+index: "scope",                 // Unique name for this oscilloscope
+host: "lescope.dhcp.lbl.gov",   // Hostname or IP for the scope
+port: 1861,                 	// Port to connect to (1861 for VICP)
+timeout: 10.0,                  // Socket read timeout in seconds
+load: 1,                        // Index [1-6] of the saved state to recall and arm
 }
 
 {

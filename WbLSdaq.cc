@@ -31,6 +31,7 @@
 #include "V1730_dpppsd.hh"
 #include "V1742.hh"
 #include "V65XX.hh"
+#include "LeCroy6Zi.hh"
 
 using namespace std;
 using namespace H5;
@@ -151,16 +152,27 @@ int main(int argc, char **argv) {
     
     VMEBridge bridge(linknum,0);
     
-    cout << "Setting up V65XX HV..." << endl;
-    
     vector<V65XX*> hvs;
-    
     vector<RunTable> v65XXs = db.getGroup("V65XX");
+    if (v65XXs.size() > 0) cout << "Setting up V65XX HV..." << endl;
     for (size_t i = 0; i < v65XXs.size(); i++) {
         RunTable &tbl = v65XXs[i];
         cout << "\t" << tbl["index"].cast<string>() << endl;
         hvs.push_back(new V65XX(bridge,tbl["base_address"].cast<int>()));
         hvs.back()->set(tbl);
+    }
+    
+    vector<LeCroy6Zi*> lescopes;
+    vector<RunTable> lecroy6zis = db.getGroup("LECROY6ZI");
+    if (lecroy6zis.size() > 0) cout << "Setting up LeCroy6Zi..." << endl;
+    for (size_t i = 0; i < lecroy6zis.size(); i++) {
+        RunTable &tbl = lecroy6zis[i];
+        cout << "\t" << tbl["index"].cast<string>() << endl;
+        lescopes.push_back(new LeCroy6Zi(tbl["host"].cast<string>(),tbl["port"].cast<int>(),tbl["timeout"].cast<double>()));
+        lescopes.back()->reset();
+        lescopes.back()->checklast();
+        lescopes.back()->recall(tbl["load"].cast<int>());
+        lescopes.back()->checklast();
     }
     
     cout << "Setting up digitizers..." << endl;
@@ -231,7 +243,10 @@ int main(int argc, char **argv) {
         if (i == arm_last) continue;
         digitizers[i]->startAcquisition();
     }
-    digitizers[arm_last]->startAcquisition();
+    if (digitizers.size() > 0) digitizers[arm_last]->startAcquisition();
+    for (size_t i = 0; i < lescopes.size(); i++) {
+        lescopes[i]->normal();
+    }
     
     decode_thread_data data;
     data.buffers = &buffers;
@@ -297,7 +312,10 @@ int main(int argc, char **argv) {
     cout << "Stopping acquisition..." << endl;
     pthread_mutex_unlock(&iomutex);
     
-    digitizers[arm_last]->stopAcquisition();
+    for (size_t i = 0; i < lescopes.size(); i++) {
+        lescopes[i]->stop();
+    }
+    if (digitizers.size() > 0) digitizers[arm_last]->stopAcquisition();
     for (size_t i = 0; i < digitizers.size(); i++) {
         if (i == arm_last) continue;
         digitizers[i]->stopAcquisition();
