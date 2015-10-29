@@ -1,4 +1,4 @@
-/**
+/** 
  *  Copyright 2014 by Benjamin Land (a.k.a. BenLand100)
  *
  *  fastjson is free software: you can redistribute it and/or modify

@@ -210,6 +210,7 @@ V1742Decoder::V1742Decoder(size_t _eventBuffer, V1742Settings &_settings) : even
                     samples[gr][ch] = new uint16_t[eventBuffer*nSamples];
                 }
                 start_index[gr] = new uint16_t[eventBuffer];
+                patterns[gr] = new uint16_t[eventBuffer];
                 trigger_count[gr] = new uint32_t[eventBuffer];
                 trigger_time[gr] = new uint32_t[eventBuffer];
             }
@@ -239,6 +240,7 @@ V1742Decoder::~V1742Decoder() {
                 for (size_t ch = 0; ch < 8; ch++) {
                     delete [] samples[gr][ch];
                 }
+                delete [] patterns[gr];
                 delete [] start_index[gr];
                 delete [] trigger_count[gr];
                 delete [] trigger_time[gr];
@@ -279,14 +281,13 @@ uint32_t* V1742Decoder::decode_event_structure(uint32_t *event) {
     
     uint32_t size = event[0] & 0xFFFFFFF;
     
-    /*
-    uint32_t board_id = (event[1] & 0xF800000000) >> 27;
-    uint32_t pattern = (event[1] & 0x3FFF00) >> 8;
-    */
-    
+    //uint32_t board_id = (event[1] & 0xF800000000) >> 27;
+    uint32_t pattern = (event[1] & 0x7FFF00) >> 8;
     uint32_t mask = event[1] & 0xF;
     uint32_t count = event[2] & 0x3FFFFF;
     uint32_t timetag = event[3];
+    
+    cout << "\t----V1742---- " << pattern << endl; 
     
     if (event_counter++) {
         if (count == trigger_last) {
@@ -310,6 +311,7 @@ uint32_t* V1742Decoder::decode_event_structure(uint32_t *event) {
             if (eventBuffer) {
                 size_t ev = grGrabbed[gr]++;
                 if (ev == eventBuffer) throw runtime_error("Decoder buffer for " + settings.getIndex() + " overflowed!");
+                patterns[gr][ev] = pattern;
                 trigger_time[gr][ev] = timetag;
                 trigger_count[gr][ev] = count;
             }
@@ -447,6 +449,11 @@ void V1742Decoder::writeOut(H5File &file, size_t nEvents) {
         DataSet start_index_ds = file.createDataSet(grgroupname+"/start_index", PredType::NATIVE_UINT16, metaspace);
         start_index_ds.write(start_index[gr], PredType::NATIVE_UINT16);
         memcpy(start_index[gr],start_index[gr]+nEvents,sizeof(uint16_t)*(grGrabbed[gr]-nEvents));
+        
+        cout << "\t" << grgroupname << "/patterns" << endl;
+        DataSet patterns_ds = file.createDataSet(grgroupname+"/patterns", PredType::NATIVE_UINT16, metaspace);
+        patterns_ds.write(patterns[gr], PredType::NATIVE_UINT16);
+        memcpy(patterns[gr],patterns[gr]+nEvents,sizeof(uint16_t)*(grGrabbed[gr]-nEvents));
             
         cout << "\t" << grgroupname << "/trigger_time" << endl;
         DataSet trigger_time_ds = file.createDataSet(grgroupname+"/trigger_time", PredType::NATIVE_UINT32, metaspace);

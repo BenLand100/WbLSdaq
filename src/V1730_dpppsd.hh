@@ -280,10 +280,10 @@ class V1730Decoder : public Decoder {
         std::map<uint32_t,uint32_t> chan2idx,idx2chan;
         std::vector<size_t> nsamples;
         std::vector<size_t> grabbed;
-        std::vector<uint16_t*> grabs, baselines, qshorts, qlongs;
+        std::vector<uint16_t*> grabs, baselines, qshorts, qlongs, patterns;
         std::vector<uint64_t*> times;
 
-        uint32_t* decode_chan_agg(uint32_t *chanagg, uint32_t group);
+        uint32_t* decode_chan_agg(uint32_t *chanagg, uint32_t group, uint16_t pattern);
 
         uint32_t* decode_board_agg(uint32_t *boardagg);
 

@@ -188,6 +188,7 @@ class V1742Decoder : public Decoder {
         size_t grGrabbed[4];
         uint16_t *samples[4][8];
         uint16_t *start_index[4];
+        uint16_t *patterns[4];
         uint32_t *trigger_count[4];
         uint32_t *trigger_time[4];
         bool trActive[2];

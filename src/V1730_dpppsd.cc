@@ -199,13 +199,14 @@ bool V1730::program(DigitizerSettings &_settings) {
     
     //Front panel config
     data = (1<<0) //ttl
-         | (1<<2) | (1<<3) | (1<<4) | (0<<5) //LVDS (output,output,output,input)
-         | (1<<6) // programed IO
-         | (1<<8); // new features
+         | (0<<2) | (0<<3) | (0<<4) | (0<<5) //LVDS all input
+         | (2<<6) // pattern mode
+         | (0<<8) // old lvds features
+         | (0<<9);// latch on internal trigger 
     write32(REG_FRONT_PANEL_CONTROL,data);
     
     //LVDS new features config
-    data = (1<<0) | (1<<4) | (2<<8) | (2<<12); //(trigger,trigger,status,status)
+    data = (0<<0) | (0<<4) | (0<<8) | (0<<12); // ignored for now
     write32(REG_LVDS_NEW_FEATURES,data);
 
     data = (1 << 2) //individual trigger propagation
@@ -373,6 +374,7 @@ V1730Decoder::V1730Decoder(size_t _eventBuffer, V1730Settings &_settings) : even
             grabbed.push_back(0);
             if (eventBuffer > 0) {
                 grabs.push_back(new uint16_t[eventBuffer*nsamples.back()]);
+                patterns.push_back(new uint16_t[eventBuffer]);
                 baselines.push_back(new uint16_t[eventBuffer]);
                 qshorts.push_back(new uint16_t[eventBuffer]);
                 qlongs.push_back(new uint16_t[eventBuffer]);
@@ -388,6 +390,7 @@ V1730Decoder::V1730Decoder(size_t _eventBuffer, V1730Settings &_settings) : even
 V1730Decoder::~V1730Decoder() {
     for (size_t i = 0; i < grabs.size(); i++) {
         delete [] grabs[i];
+        delete [] patterns[i];
         delete [] baselines[i];
         delete [] qshorts[i];
         delete [] qlongs[i];
@@ -480,6 +483,11 @@ void V1730Decoder::writeOut(H5File &file, size_t nEvents) {
         samples_ds.write(grabs[i], PredType::NATIVE_UINT16);
         memcpy(grabs[i],grabs[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
         
+        cout << "\t" << groupname << "/patterns" << endl;
+        DataSet patterns_ds = file.createDataSet(groupname+"/patterns", PredType::NATIVE_UINT16, metaspace);
+        patterns_ds.write(patterns[i], PredType::NATIVE_UINT16);
+        memcpy(patterns[i],patterns[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
+        
         cout << "\t" << groupname << "/baselines" << endl;
         DataSet baselines_ds = file.createDataSet(groupname+"/baselines", PredType::NATIVE_UINT16, metaspace);
         baselines_ds.write(baselines[i], PredType::NATIVE_UINT16);
@@ -504,7 +512,7 @@ void V1730Decoder::writeOut(H5File &file, size_t nEvents) {
     }
 }
 
-uint32_t* V1730Decoder::decode_chan_agg(uint32_t *chanagg, uint32_t group) {
+uint32_t* V1730Decoder::decode_chan_agg(uint32_t *chanagg, uint32_t group, uint16_t pattern) {
     const bool format_flag = chanagg[0] & 0x80000000;
     if (!format_flag) throw runtime_error("Channel format not found");
     
@@ -554,8 +562,8 @@ uint32_t* V1730Decoder::decode_chan_agg(uint32_t *chanagg, uint32_t group) {
                 //uint8_t dp21 = (*word >> 31) & 0x1;
             }
             
+            patterns[idx][ev] = pattern;
             baselines[idx][ev] = event[1+samples/2+0] & 0xFFFF;
-            //uint16_t extratime = (event[1+samples/2+0] >> 16) & 0xFFFF;
             qshorts[idx][ev] = event[1+samples/2+1] & 0x7FFF;
             qlongs[idx][ev] = (event[1+samples/2+1] >> 16) & 0xFFFF;
             times[idx][ev] = ((uint64_t)(event[0] & 0x7FFFFFFF)) | (((uint64_t)(event[1+samples/2+0]&0xFFFF))<<15);
@@ -581,8 +589,10 @@ uint32_t* V1730Decoder::decode_board_agg(uint32_t *boardagg) {
     
     //const uint32_t board = (boardagg[1] >> 28) & 0xF;
     //const bool fail = boardagg[1] & (1 << 26);
-    //const uint32_t pattern = (boardagg[1] >> 8) & 0x7FFF;
+    const uint16_t pattern = (boardagg[1] >> 8) & 0x7FFF;
     const uint32_t mask = boardagg[1] & 0xFF;
+    
+    cout << "\t---V1730---- " << pattern << endl;
     
     //const uint32_t count = boardagg[2] & 0x7FFFFF;
     //const uint32_t timetag = boardagg[3];
@@ -591,7 +601,7 @@ uint32_t* V1730Decoder::decode_board_agg(uint32_t *boardagg) {
     
     for (uint32_t gr = 0; gr < 8; gr++) {
         if (mask & (1 << gr)) {
-            chans = decode_chan_agg(chans,gr);
+            chans = decode_chan_agg(chans,gr,pattern);
         }
     } 
     

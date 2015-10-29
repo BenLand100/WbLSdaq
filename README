@@ -7,6 +7,6 @@ attributes that may be relevant to the datataking process.
 
 WbLSdaq depends on CAEN's VME library and the HDF5 library.
 
-To build, execute the script ./build.sh in the top directory
+To build, run `make` in the top directory
 
 To use, ./WbLSdaq settings.json

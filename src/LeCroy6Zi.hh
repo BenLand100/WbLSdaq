@@ -1,4 +1,4 @@
-/**
+/** 
  *  Copyright 2014 by Benjamin Land (a.k.a. BenLand100)
  *
  *  WbLSdaq is free software: you can redistribute it and/or modify
@@ -32,7 +32,7 @@ class LeCroy6Zi {
         LeCroy6Zi(std::string addr, int port = 1861, double timeout = 1.0);
         virtual ~LeCroy6Zi();
         
-        void send(std::string msg);
+        void send(std::string msg, uint8_t flags = OP_DATA|OP_EOI|OP_LOCKOUT);
         
         std::string recv();
         

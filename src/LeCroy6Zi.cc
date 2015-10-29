@@ -79,9 +79,9 @@ void fdread(int fd, void *buf, size_t count) {
     }
 }
 
-void LeCroy6Zi::send(string msg) {
+void LeCroy6Zi::send(string msg, uint8_t flags) {
     header h;
-    h.operation = OP_DATA|OP_EOI;
+    h.operation = flags;
     h.version = 1;
     h.seqnum = ((seqnum++) % 254) + 1;
     h.spare = 0;
