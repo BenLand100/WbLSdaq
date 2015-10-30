@@ -307,7 +307,7 @@ uint32_t* V1742Decoder::decode_event_structure(uint32_t *event) {
     uint32_t count = event[2] & 0x3FFFFF;
     uint32_t timetag = event[3];
     
-    cout << "\t----V1742---- " << (pattern&0xFF) << endl; 
+    cout << "\t(LVDS & 0xFF): " << (pattern&0xFF) << endl; 
     
     if (event_counter++) {
         if (count == trigger_last) {
@@ -328,8 +328,8 @@ uint32_t* V1742Decoder::decode_event_structure(uint32_t *event) {
     
     for (uint32_t gr = 0; gr < 4; gr++) {
         if (mask & (1 << gr)) {
+            size_t ev = grGrabbed[gr]++;
             if (eventBuffer) {
-                size_t ev = grGrabbed[gr]++;
                 if (ev == eventBuffer) throw runtime_error("Decoder buffer for " + settings.getIndex() + " overflowed!");
                 patterns[gr][ev] = pattern;
                 trigger_time[gr][ev] = timetag;
@@ -391,8 +391,6 @@ uint32_t* V1742Decoder::decode_group_structure(uint32_t *group, uint32_t gr) {
             }
         }
         
-    } else {
-        grGrabbed[gr]++;
     }
     
     return group + 2 + size + (tr ? size/8 : 0);
