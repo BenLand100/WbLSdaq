@@ -6,6 +6,7 @@ repeat_times: 0,                // number of times to repeat this run (nonzero a
 link_num: 0,                    // the nth V1718 connected to computer
 check_temps_every: 10,          // check temps of ADCs every X seconds 
 arm_last: "master",             // index of the digitizer to arm last (generates triggers)
+soft_trig: "fast",              // index of the digitizer to software trigger before starting acquisition
 }
 
 {
@@ -114,6 +115,8 @@ num_samples: 0,                 // Choose index [1024, 520, 256, 136]
 sample_freq: 2,                 // Choose index [5 GHz, 2.5 GHz, 1 GHz]
 software_trigger: false,        // Global trigger on software trigger
 external_trigger: true,         // Global trigger on software trigger
+software_trigger_out: true,     // Trigger out on software trigger
+external_trigger_out: false,    // Trigger out on software trigger
 trigger_offset: 1,              // Multiples of 8.5ns to wait after trigger before digitizing samples
 events_per_transfer: 10,        // Max events to transfer during one VME BLT
 }

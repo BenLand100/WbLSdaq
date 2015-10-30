@@ -52,6 +52,8 @@ class Digitizer : public VMECard {
         
         virtual bool checkTemps(std::vector<uint32_t> &temps, uint32_t danger) = 0;
         
+        virtual void softTrig() = 0;
+        
         virtual void startAcquisition() = 0;
         
         virtual void stopAcquisition() = 0;

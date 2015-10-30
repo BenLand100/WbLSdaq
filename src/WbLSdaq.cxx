@@ -82,7 +82,7 @@ void *decode_thread(void *_data) {
             
             clock_gettime(CLOCK_MONOTONIC,&cur_time);
             double time_int = (cur_time.tv_sec - last_time.tv_sec)+1e-9*(cur_time.tv_nsec - last_time.tv_nsec);
-            cout << "Avg rate " << ((double)total/data->decoders->size())/time_int << " Hz" << endl;
+            cout << "Avg rate " << ((double)total)/time_int << " Hz" << endl;
             
             if (writeout) {
                 Exception::dontPrint();
@@ -182,8 +182,6 @@ int main(int argc, char **argv) {
     vector<Buffer*> buffers;
     vector<Decoder*> decoders;
     
-    size_t arm_last = 0;
-    
     vector<RunTable> v1730s = db.getGroup("V1730");
     for (size_t i = 0; i < v1730s.size(); i++) {
         RunTable &tbl = v1730s[i];
@@ -194,7 +192,6 @@ int main(int argc, char **argv) {
         ((V1730*)digitizers.back())->calib();
         buffers.push_back(new Buffer(tbl["buffer_size"].cast<int>()*1024*1024));
         if (!digitizers.back()->program(*stngs)) return -1;
-        if (stngs->getIndex() == run["arm_last"].cast<string>()) arm_last = i;
         // decoders need settings after programming
         decoders.push_back(new V1730Decoder((size_t)(nEvents*1.5),*stngs));
     }
@@ -208,9 +205,14 @@ int main(int argc, char **argv) {
         digitizers.push_back(new V1742(bridge,tbl["base_address"].cast<int>()));
         buffers.push_back(new Buffer(tbl["buffer_size"].cast<int>()*1024*1024));
         if (!digitizers.back()->program(*stngs)) return -1;
-        if (stngs->getIndex() == run["arm_last"].cast<string>()) arm_last = i;
         // decoders need settings after programming
         decoders.push_back(new V1742Decoder((size_t)(nEvents*1.5),*stngs)); 
+    }
+    
+    size_t arm_last = 0;
+    for (size_t i = 0; i < digitizers.size(); i++) {
+        if (run.isMember("arm_last") && settings[i]->getIndex() == run["arm_last"].cast<string>()) 
+            arm_last = i;
     }
     
     cout << "Waiting for HV to stabilize..." << endl;
@@ -242,8 +244,18 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < digitizers.size(); i++) {
         if (i == arm_last) continue;
         digitizers[i]->startAcquisition();
+        if (run.isMember("soft_trig") && settings[i]->getIndex() == run["soft_trig"].cast<string>()) {
+            cout << "Software triggering " << settings[i]->getIndex() << endl;
+            digitizers[i]->softTrig();
+        }
     }
-    if (digitizers.size() > 0) digitizers[arm_last]->startAcquisition();
+    if (digitizers.size() > 0) {
+        digitizers[arm_last]->startAcquisition();
+        if (run.isMember("soft_trig") && settings[arm_last]->getIndex() == run["soft_trig"].cast<string>()) {
+            cout << "Software triggering " << settings[arm_last]->getIndex() << endl;
+            digitizers[arm_last]->softTrig();
+        }
+    }
     for (size_t i = 0; i < lescopes.size(); i++) {
         lescopes[i]->normal();
     }

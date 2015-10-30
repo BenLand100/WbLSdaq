@@ -37,6 +37,8 @@ V1742Settings::V1742Settings() : DigitizerSettings("") {
     card.sample_freq = 0; //2 bit [5, 2.5, 1]
     card.software_trigger_enable = 0; //1 bit bool
     card.external_trigger_enable = 0; //1 bit bool
+    card.software_trigger_out = 0; //1 bit bool
+    card.external_trigger_out = 0; //1 bit bool
     card.post_trigger = 0; //10 bit (8.5ns steps)
     for (uint32_t gr = 0; gr < 4; gr++) {
         groupDefaults(gr);
@@ -56,6 +58,8 @@ V1742Settings::V1742Settings(RunTable &dgtz, RunDB &db) : DigitizerSettings(dgtz
     card.sample_freq = dgtz["sample_freq"].cast<int>(); //2 bit [5, 2.5, 1]
     card.software_trigger_enable = dgtz["software_trigger"].cast<bool>() ? 1 : 0; //1 bit bool
     card.external_trigger_enable = dgtz["external_trigger"].cast<bool>() ? 1 : 0; //1 bit bool
+    card.software_trigger_out = dgtz["software_trigger_out"].cast<bool>() ? 1 : 0; //1 bit bool
+    card.external_trigger_out = dgtz["external_trigger_out"].cast<bool>() ? 1 : 0; //1 bit bool
     card.post_trigger = dgtz["trigger_offset"].cast<int>(); //10 bit (8.5ns steps)
     for (uint32_t gr = 0; gr < 4; gr++) {
         string grname = "GR"+to_string(gr);
@@ -95,6 +99,8 @@ void V1742Settings::validate() {
     if (card.sample_freq > 2) throw runtime_error("tr_polarity must be < 3");
     if (card.software_trigger_enable & (~0x1)) throw runtime_error("software_trigger_enable must be 1 bit");
     if (card.external_trigger_enable & (~0x1)) throw runtime_error("external_trigger_enable must be 1 bit");
+    if (card.software_trigger_out & (~0x1)) throw runtime_error("software_trigger_out must be 1 bit");
+    if (card.external_trigger_out & (~0x1)) throw runtime_error("external_trigger_out must be 1 bit");
     if (card.post_trigger > 1023) throw runtime_error("post_trigger must be < 1024");
     for (uint32_t gr = 0; gr < 4; gr++) {
         if (card.group_enable[gr] & (~0x1)) throw runtime_error("external_trigger_enable must be 1 bit");
@@ -128,7 +134,12 @@ bool V1742::program(DigitizerSettings &_settings) {
     usleep(10000);
     
     //Set TTL logic levels, ignore LVDS and debug settings
-    write32(REG_FRONT_PANEL_CONTROL,1);
+    data = (1<<0) // ttl levels
+         | (0<<2) | (0<<3) | (0<<4) | (0<<5) // lvds all input
+         | (2<<6) // pattern mode
+         | (0<<14) // trgout level
+         | (0<<15);// trgout ctrl
+    write32(REG_FRONT_PANEL_CONTROL,data);
     
     write32(REG_TR_THRESHOLD|(0<<8),settings.card.tr0_threshold);
     write32(REG_TR_THRESHOLD|(2<<8),settings.card.tr1_threshold);
@@ -150,6 +161,11 @@ bool V1742::program(DigitizerSettings &_settings) {
          | (((uint32_t)settings.card.external_trigger_enable)<<30);
     write32(REG_TRIGGER_SOURCE,data);
     
+    
+    data = (((uint32_t)settings.card.software_trigger_out)<<31)
+         | (((uint32_t)settings.card.external_trigger_out)<<30);
+    write32(REG_TRIGGER_OUT,data);
+    
     uint32_t group_enable = 0;
     for (uint32_t gr = 0; gr < 4; gr++) {
         group_enable |= settings.card.group_enable[gr]<<gr;
@@ -167,6 +183,10 @@ bool V1742::program(DigitizerSettings &_settings) {
     write32(REG_READOUT_CONTROL,1<<4);
     
     return true;
+}
+
+void V1742::softTrig() {
+    write32(REG_SOFTWARE_TRIGGER,0xDEADBEEF);
 }
 
 void V1742::startAcquisition() {
@@ -287,7 +307,7 @@ uint32_t* V1742Decoder::decode_event_structure(uint32_t *event) {
     uint32_t count = event[2] & 0x3FFFFF;
     uint32_t timetag = event[3];
     
-    cout << "\t----V1742---- " << pattern << endl; 
+    cout << "\t----V1742---- " << (pattern&0xFF) << endl; 
     
     if (event_counter++) {
         if (count == trigger_last) {

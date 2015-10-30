@@ -308,6 +308,10 @@ bool V1730::program(DigitizerSettings &_settings) {
     return true;
 }
 
+void V1730::softTrig() {
+    write32(REG_SOFTWARE_TRIGGER,0xDEADBEEF);
+}
+
 void V1730::startAcquisition() {
     write32(REG_ACQUISITION_CONTROL,1<<2);
 }
@@ -592,7 +596,7 @@ uint32_t* V1730Decoder::decode_board_agg(uint32_t *boardagg) {
     const uint16_t pattern = (boardagg[1] >> 8) & 0x7FFF;
     const uint32_t mask = boardagg[1] & 0xFF;
     
-    cout << "\t---V1730---- " << pattern << endl;
+    cout << "\t---V1730---- " << (pattern & 0xFF) << endl;
     
     //const uint32_t count = boardagg[2] & 0x7FFFFF;
     //const uint32_t timetag = boardagg[3];

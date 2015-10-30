@@ -235,6 +235,8 @@ class V1730 : public Digitizer {
 
         virtual bool program(DigitizerSettings &settings);
         
+        virtual void softTrig();
+        
         virtual void startAcquisition();
         
         virtual void stopAcquisition();

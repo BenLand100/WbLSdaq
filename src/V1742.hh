@@ -42,6 +42,8 @@ typedef struct {
     uint8_t sample_freq; //2 bit [5, 2.5, 1]
     uint8_t software_trigger_enable; //1 bit bool
     uint8_t external_trigger_enable; //1 bit bool
+    uint8_t software_trigger_out; //1 bit bool
+    uint8_t external_trigger_out; //1 bit bool
     uint16_t post_trigger; //10 bit (8.5ns steps)
     uint8_t group_enable[4]; //1 bit bool
     uint8_t max_event_blt; //8 bit events per transfer
@@ -129,6 +131,7 @@ class V1742 : public Digitizer {
     static constexpr uint32_t REG_ACQUISITION_STATUS = 0x8104;
     static constexpr uint32_t REG_SOFTWARE_TRIGGER = 0x8108;
     static constexpr uint32_t REG_TRIGGER_SOURCE = 0x810C;
+    static constexpr uint32_t REG_TRIGGER_OUT = 0x8110;
     static constexpr uint32_t REG_POST_TRIGGER = 0x8114;
     static constexpr uint32_t REG_GROUP_ENABLE = 0x8120;
 
@@ -145,6 +148,8 @@ class V1742 : public Digitizer {
         virtual ~V1742();
         
         virtual bool program(DigitizerSettings &settings);
+        
+        virtual void softTrig();
         
         virtual void startAcquisition();
         
