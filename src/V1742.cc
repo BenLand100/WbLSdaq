@@ -398,7 +398,7 @@ uint32_t* V1742Decoder::decode_group_structure(uint32_t *group, uint32_t gr) {
 }
 
 size_t V1742Decoder::eventsReady() {
-    size_t grabs = eventBuffer;
+    size_t grabs = INT64_MAX;//eventBuffer;
     for (size_t gr = 0; gr < 4; gr++) {
         if (grActive[gr] && grGrabbed[gr] < grabs) grabs = grGrabbed[gr];
     }
