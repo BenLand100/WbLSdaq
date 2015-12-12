@@ -74,7 +74,7 @@ void *decode_thread(void *_data) {
                 size_t sz = (*data->buffers)[i]->fill();
                 if (sz > 0) (*data->decoders)[i]->decode(*(*data->buffers)[i]);
                 size_t ev = (*data->decoders)[i]->eventsReady();
-                if (ev < data->nEvents) writeout = false;
+                if (ev < data->nEvents && (i == 0)) writeout = false; //FIXME dirty hack to break on first decoder events only
                 total += ev;
             }
             
@@ -104,7 +104,7 @@ void *decode_thread(void *_data) {
                 runtime.write(PredType::NATIVE_DOUBLE,&time_int);
                 
                 for (size_t i = 0; i < data->decoders->size(); i++) {
-                    (*data->decoders)[i]->writeOut(file,data->nEvents);
+                    (*data->decoders)[i]->writeOut(file,i==0 ? data->nEvents : (*data->decoders)[i]->eventsReady()); //FIXME dirty hack as above
                 }
                 
                 last_time = cur_time;
