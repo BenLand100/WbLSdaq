@@ -28,11 +28,16 @@ class VMEBridge {
 
     protected: 
         static const std::string error_codes[6];
+        int link;
+        int board;
     
     public:
         VMEBridge(int link, int board);
         
         virtual ~VMEBridge();
+        
+        inline int getLinkNum() { return link; }
+        inline int getBoardNum() { return board; }
 
         inline void write32(uint32_t addr, uint32_t data) {
             //std::cout << "\twrite32@" << std::hex << addr << ':' << data << dec << endl;

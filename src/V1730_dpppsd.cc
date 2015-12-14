@@ -100,7 +100,7 @@ V1730Settings::V1730Settings(RunTable &digitizer, RunDB &db) : DigitizerSettings
             chans[ch].fixed_baseline = 0; // 12 bit
             
             chans[ch].enabled = channel["enabled"].cast<bool>() ? 1 : 0; //1 bit
-            chans[ch].dc_offset = round((channel["dc_offset"].cast<double>()+1.0)/2.0*pow(2.0,16.0)); // 16 bit (-1V to 1V)
+            chans[ch].dc_offset = round((-channel["dc_offset"].cast<double>()+1.0)/2.0*pow(2.0,16.0)); // 16 bit (-1V to 1V)
             chans[ch].baseline_mean = channel["baseline_average"].cast<int>(); // 3 bit (fixed,16,64,256,1024)
             chans[ch].pulse_polarity = channel["pulse_polarity"].cast<int>(); // 1 bit (0->positive, 1->negative)
             chans[ch].trg_threshold =  channel["trigger_threshold"].cast<int>();// 12 bit

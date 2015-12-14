@@ -19,7 +19,8 @@
 #include <vector>
 #include <string>
 #include <ctime>
- 
+
+#include <CAENDigitizer.h>
 #include "VMEBridge.hh"
 #include "Digitizer.hh"
 #include "RunDB.hh"
@@ -48,6 +49,8 @@ typedef struct {
     uint8_t group_enable[4]; //1 bit bool
     uint8_t max_event_blt; //8 bit events per transfer
 } V1742_card_config;
+
+enum V1742SampleFreq {GHz_5, GHz_2_5, GHz_1};
 
 class V1742Settings : public DigitizerSettings  {
     friend class V1742;
@@ -93,6 +96,15 @@ class V1742Settings : public DigitizerSettings  {
             }
         }
         
+        inline V1742SampleFreq sampleFreq() {
+            switch (card.sample_freq) {
+                case 0: return GHz_5;
+                case 1: return GHz_2_5;
+                case 2: return GHz_1;
+                default: throw std::runtime_error("Invalid custom_size");
+            }
+        }
+        
         inline uint32_t getDCOffset(uint32_t ch) {
             return card.dc_offset[ch];
         }
@@ -103,6 +115,25 @@ class V1742Settings : public DigitizerSettings  {
         
         void groupDefaults(uint32_t group);
         
+};
+
+class V1742calib {
+
+    public:
+        V1742calib(CAEN_DGTZ_DRS4Correction_t *dat);
+        
+        virtual ~V1742calib();
+        
+        virtual void calibrate(uint16_t *samples[4][8], size_t sampPerEv, uint16_t *start_index[4], bool grActive[4], size_t num);
+        
+    protected:
+        struct {
+            struct {
+                int cell_offset[1024], seq_offset[1024];
+            } chans[8]; 
+            int cell_delay[1024];   
+        } groups[4];
+
 };
 
 class V1742 : public Digitizer {
@@ -161,13 +192,17 @@ class V1742 : public Digitizer {
         
         virtual bool checkTemps(std::vector<uint32_t> &temps, uint32_t danger);
         
+        virtual V1742calib* getCalib(V1742SampleFreq freq);
+        
+        static V1742calib* staticGetCalib(V1742SampleFreq freq, int link, uint32_t baseaddr);
+        
 };
 
 class V1742Decoder : public Decoder {
 
     public: 
     
-        V1742Decoder(size_t eventBuffer, V1742Settings &settings);
+        V1742Decoder(size_t eventBuffer, V1742calib *calib, V1742Settings &settings);
         
         virtual ~V1742Decoder();
         
@@ -180,6 +215,7 @@ class V1742Decoder : public Decoder {
     protected:
         
         size_t eventBuffer;
+        V1742calib *calib;
         V1742Settings &settings;
         
         size_t decode_size;

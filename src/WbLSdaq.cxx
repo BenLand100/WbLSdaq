@@ -103,6 +103,10 @@ void *decode_thread(void *_data) {
                 Attribute runtime = root.createAttribute("runtime",PredType::NATIVE_DOUBLE,scalar);
                 runtime.write(PredType::NATIVE_DOUBLE,&time_int);
                 
+                int epochtime = time(NULL);
+                Attribute timestamp = root.createAttribute("unix_timestamp_written",PredType::NATIVE_INT,scalar);
+                runtime.write(PredType::NATIVE_DOUBLE,&epochtime);
+                
                 for (size_t i = 0; i < data->decoders->size(); i++) {
                     (*data->decoders)[i]->writeOut(file,i==0 ? data->nEvents : (*data->decoders)[i]->eventsReady()); //FIXME dirty hack as above
                 }
@@ -146,6 +150,21 @@ int main(int argc, char **argv) {
         nRepeat = run["repeat_times"].cast<int>();
     } else {
         nRepeat = 0;
+    }
+    
+    cout << "Grabbing V1742 calibration..." << endl;
+    
+    //This has to be done before using the CANEVME library due to bugs in the
+    //CAENDigitizer library... so hack it in here.
+    vector<RunTable> v1742s = db.getGroup("V1742");
+    vector<V1742Settings*> v1742settings;
+    vector<V1742calib*> v1742calibs;
+    for (size_t i = 0; i < v1742s.size(); i++) {
+        RunTable &tbl = v1742s[i];
+        cout << "* V1742 - " << tbl.getIndex() << endl;
+        V1742Settings *stngs = new V1742Settings(tbl,db);
+        v1742settings.push_back(stngs);
+        v1742calibs.push_back(V1742::staticGetCalib(stngs->sampleFreq(),run["link_num"].cast<int>(),tbl["base_address"].cast<int>()));
     }
 
     cout << "Opening VME link..." << endl;
@@ -196,17 +215,17 @@ int main(int argc, char **argv) {
         decoders.push_back(new V1730Decoder((size_t)(nEvents*1.5),*stngs));
     }
     
-    vector<RunTable> v1742s = db.getGroup("V1742");
     for (size_t i = 0; i < v1742s.size(); i++) {
         RunTable &tbl = v1742s[i];
         cout << "* V1742 - " << tbl.getIndex() << endl;
-        V1742Settings *stngs = new V1742Settings(tbl,db);
+        V1742Settings *stngs = v1742settings[i];
         settings.push_back(stngs);
-        digitizers.push_back(new V1742(bridge,tbl["base_address"].cast<int>()));
+        V1742 *card = new V1742(bridge,tbl["base_address"].cast<int>());
+        digitizers.push_back(card);
         buffers.push_back(new Buffer(tbl["buffer_size"].cast<int>()*1024*1024));
         if (!digitizers.back()->program(*stngs)) return -1;
         // decoders need settings after programming
-        decoders.push_back(new V1742Decoder((size_t)(nEvents*1.5),*stngs)); 
+        decoders.push_back(new V1742Decoder((size_t)(nEvents*1.5),v1742calibs[i],*stngs)); 
     }
     
     size_t arm_last = 0;

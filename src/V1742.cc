@@ -72,7 +72,7 @@ V1742Settings::V1742Settings(RunTable &dgtz, RunDB &db) : DigitizerSettings(dgtz
             vector<double> offsets = group["dc_offsets"].toVector<double>();
             if (offsets.size() != 8) throw runtime_error("Group DC offsets expected to be length 8");
             for (uint32_t ch = 0; ch < 8; ch++) {
-                card.dc_offset[ch+gr*8] = round((offsets[ch]+1.0)/2.0*pow(2.0,16.0)); //16 bit channel offsets
+                card.dc_offset[ch+gr*8] = round((-offsets[ch]+1.0)/2.0*pow(2.0,16.0)); //16 bit channel offsets
             }  
         }
     }
@@ -104,6 +104,48 @@ void V1742Settings::validate() {
     if (card.post_trigger > 1023) throw runtime_error("post_trigger must be < 1024");
     for (uint32_t gr = 0; gr < 4; gr++) {
         if (card.group_enable[gr] & (~0x1)) throw runtime_error("external_trigger_enable must be 1 bit");
+    }
+
+}
+
+V1742calib::V1742calib(CAEN_DGTZ_DRS4Correction_t *dat) {
+    for (size_t gr = 0; gr < 4; gr++) {
+        CAEN_DGTZ_DRS4Correction_t &cal = dat[gr];
+        for (size_t i = 0; i < 1024; i++) {
+            groups[gr].cell_delay[i] = cal.time[i];
+        }
+        for (size_t ch = 0; ch < 8; ch++) {
+            for (size_t i = 0; i < 1024; i++) {
+                groups[gr].chans[ch].cell_offset[i] = cal.cell[ch][i];
+                groups[gr].chans[ch].seq_offset[i] = cal.nsample[ch][i];
+            }
+        }
+    }
+}
+
+V1742calib::~V1742calib() {
+
+}
+
+void V1742calib::calibrate(uint16_t *samples[4][8], size_t sampPerEv, uint16_t *start_index[4], bool grActive[4], size_t numEv) {
+    
+    cout << "\tCalibrating V1742 data..." << endl;
+    
+    for (size_t gr = 0; gr < 4; gr++) {
+        if (!grActive[gr]) continue;
+        for (size_t ev = 0; ev < numEv; ev++) {
+            uint16_t cellidx = start_index[gr][ev];
+            for (size_t ch = 0; ch < 8; ch++) {
+                uint16_t *samps = samples[gr][ch]+ev*sampPerEv;
+                //Apply CAEN offsets 
+                for (size_t i = 0; i < sampPerEv; i++) {
+                    samps[i] = samps[i] - groups[gr].chans[ch].seq_offset[i] - groups[gr].chans[ch].cell_offset[(cellidx+i)%1024];
+                }
+                //for (size_t j = 0; j < 1024; j++) {
+                //    code for handling spikes goes here
+                //}
+            }
+        }
     }
 
 }
@@ -215,8 +257,40 @@ bool V1742::checkTemps(vector<uint32_t> &temps, uint32_t danger) {
     return over;
 }
 
+V1742calib* V1742::staticGetCalib(V1742SampleFreq freq, int link, uint32_t baseaddr) {
+    int handle = 0;
+    int res = CAEN_DGTZ_OpenDigitizer(CAEN_DGTZ_USB, link, 0, baseaddr, &handle);
+    if (res != 0) throw runtime_error("getCalib: Could not open digitizer "+to_string(res));
+    
+    CAEN_DGTZ_DRS4Correction_t corr[4];
+    switch (freq) {
+        case GHz_5:
+            res = CAEN_DGTZ_GetCorrectionTables(handle,CAEN_DGTZ_DRS4_5GHz,&corr);
+            break;
+        case GHz_2_5:
+            res = CAEN_DGTZ_GetCorrectionTables(handle,CAEN_DGTZ_DRS4_2_5GHz,&corr);
+            break;
+        case GHz_1:
+            res = CAEN_DGTZ_GetCorrectionTables(handle,CAEN_DGTZ_DRS4_1GHz,&corr);
+            break;
+        default: throw runtime_error("getCalib: Invalid sample rate");
+    }
+    if (res != 0) throw runtime_error("getCalib: Could not get calibration data "+to_string(res));
+    
+    res = CAEN_DGTZ_CloseDigitizer(handle);
+    if (res != 0) throw runtime_error("getCalib: Could not close digitizer "+to_string(res));
+    
+    return new V1742calib(corr);
+}
 
-V1742Decoder::V1742Decoder(size_t _eventBuffer, V1742Settings &_settings) : eventBuffer(_eventBuffer), settings(_settings) {
+
+V1742calib* V1742::getCalib(V1742SampleFreq freq) {
+    //This ***will not work*** here due to a bug in CAENDigitizer
+    //call the static version BEFORE invoking any CAENVME methods
+    return staticGetCalib(freq,bridge.getLinkNum(),baseaddr);
+}
+
+V1742Decoder::V1742Decoder(size_t _eventBuffer, V1742calib *_calib, V1742Settings &_settings) : eventBuffer(_eventBuffer), calib(_calib), settings(_settings) {
 
     group_counter = event_counter = decode_counter = 0;
     
@@ -254,6 +328,7 @@ V1742Decoder::V1742Decoder(size_t _eventBuffer, V1742Settings &_settings) : even
 }
 
 V1742Decoder::~V1742Decoder() {
+    if (calib) delete calib;
     if (eventBuffer) {
         for (size_t gr = 0; gr < 4; gr++) {
             if (grActive[gr]) {
@@ -408,6 +483,8 @@ size_t V1742Decoder::eventsReady() {
 using namespace H5;
 
 void V1742Decoder::writeOut(H5File &file, size_t nEvents) {
+
+    if (calib) calib->calibrate(samples, nSamples, start_index, grActive, nEvents);
 
     cout << "\t/" << settings.getIndex() << endl;
 

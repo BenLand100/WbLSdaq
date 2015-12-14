@@ -1,5 +1,5 @@
 CFLAGS = -march=native -mtune=native -Wall -Werror -pedantic -g -O3 -std=c++11 -DLINUX -Isrc
-LFLAGS = -lhdf5_cpp -lhdf5 -lCAENVME -pthread -s
+LFLAGS = -lhdf5_cpp -lhdf5 -lCAENVME -lCAENDigitizer -pthread -s
 
 # component object for each src/*.cc with header src/*.hh
 LSRC = $(wildcard src/*.cc)
