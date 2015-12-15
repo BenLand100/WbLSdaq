@@ -142,6 +142,7 @@ int main(int argc, char **argv) {
     RunTable run = db.getTable("RUN");
     
     const int nEvents = run["events"].cast<int>();
+    if (nEvents < 0) running = false;
     const string outfile = run["outfile"].cast<string>();
     const int linknum = run["link_num"].cast<int>();
     const int temptime = run["check_temps_every"].cast<int>();

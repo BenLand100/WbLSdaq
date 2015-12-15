@@ -134,16 +134,28 @@ void V1742calib::calibrate(uint16_t *samples[4][8], size_t sampPerEv, uint16_t *
     for (size_t gr = 0; gr < 4; gr++) {
         if (!grActive[gr]) continue;
         for (size_t ev = 0; ev < numEv; ev++) {
+            uint16_t *samps[8];
             uint16_t cellidx = start_index[gr][ev];
             for (size_t ch = 0; ch < 8; ch++) {
-                uint16_t *samps = samples[gr][ch]+ev*sampPerEv;
+                samps[ch] = samples[gr][ch]+ev*sampPerEv;
                 //Apply CAEN offsets 
                 for (size_t i = 0; i < sampPerEv; i++) {
-                    samps[i] = samps[i] - groups[gr].chans[ch].seq_offset[i] - groups[gr].chans[ch].cell_offset[(cellidx+i)%1024];
+                    samps[ch][i] = samps[ch][i] - groups[gr].chans[ch].seq_offset[i] - groups[gr].chans[ch].cell_offset[(cellidx+i)%1024];
                 }
-                //for (size_t j = 0; j < 1024; j++) {
-                //    code for handling spikes goes here
-                //}
+            }
+            for (size_t i = 0; i < sampPerEv; i++) {
+                int identified = 0;
+                for (size_t ch = 0; ch < 8; ch++) {
+                    if (samps[ch][i]-samps[ch][(i+1)%sampPerEv] > 30 && samps[ch][(i+3)%sampPerEv]-samps[ch][(i+2)%sampPerEv] > 30) {
+                        identified++;
+                    }
+                }
+                if (identified > 4) {
+                    for (size_t ch = 0; ch < 8; ch++) {
+                        samps[ch][(i+1)%sampPerEv] += 53;
+                        samps[ch][(i+2)%sampPerEv] += 53;
+                    }
+                }
             }
         }
     }
