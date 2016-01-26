@@ -304,7 +304,7 @@ V1742calib* V1742::getCalib(V1742SampleFreq freq) {
 
 V1742Decoder::V1742Decoder(size_t _eventBuffer, V1742calib *_calib, V1742Settings &_settings) : eventBuffer(_eventBuffer), calib(_calib), settings(_settings) {
 
-    group_counter = event_counter = decode_counter = 0;
+    dispatch_index = group_counter = event_counter = decode_counter = 0;
     
     nSamples = settings.getNumSamples();
     for (size_t gr = 0; gr < 4; gr++) {
@@ -492,6 +492,37 @@ size_t V1742Decoder::eventsReady() {
     return grabs;
 }
 
+// length, lvdsidx, dsize, nsamples, samples[], strlen, strname[]
+
+void V1742Decoder::dispatch(int nfd, int *fds) {
+    
+    size_t ready = eventsReady();
+    
+    for ( ; dispatch_index < ready; dispatch_index++) {
+        for (size_t gr = 0; gr < 4; gr++) {
+            if (!grActive[gr]) continue;
+            for (size_t ch = 0; ch < 8; ch++) {
+                uint8_t lvdsidx = patterns[gr][dispatch_index] & 0xFF; 
+                uint8_t dsize = 2;
+                uint16_t nsamps = nSamples;
+                uint16_t *samps = &samples[gr][ch][nsamps*dispatch_index];
+                string strname = "/"+settings.getIndex()+"/gr" + to_string(gr) + "/ch" + to_string(ch);
+                uint16_t strlen = strname.length();
+                uint16_t length = 2+strlen+2+nsamps*2+1+1;
+                for (int j = 0; j < nfd; j++) {
+                    writeall(fds[j],&length,2);
+                    writeall(fds[j],&lvdsidx,1);
+                    writeall(fds[j],&dsize,1);
+                    writeall(fds[j],&nsamps,2);
+                    writeall(fds[j],samps,nsamps*2);
+                    writeall(fds[j],&strlen,2);
+                    writeall(fds[j],strname.c_str(),strlen);
+                }
+            }
+        }
+    }
+}
+
 using namespace H5;
 
 void V1742Decoder::writeOut(H5File &file, size_t nEvents) {
@@ -548,7 +579,7 @@ void V1742Decoder::writeOut(H5File &file, size_t nEvents) {
             cout << "\t" << chgroupname << "/samples" << endl;
             DataSet samples_ds = file.createDataSet(chgroupname+"/samples", PredType::NATIVE_UINT16, samplespace);
             samples_ds.write(samples[gr][ch], PredType::NATIVE_UINT16);
-            memcpy(samples[gr][ch],samples[gr][ch]+nEvents,sizeof(uint16_t)*(grGrabbed[gr]-nEvents));
+            memcpy(samples[gr][ch],samples[gr][ch]+nEvents*nSamples,sizeof(uint16_t)*nSamples*(grGrabbed[gr]-nEvents));
             
         }
             
@@ -574,4 +605,7 @@ void V1742Decoder::writeOut(H5File &file, size_t nEvents) {
         
         grGrabbed[gr] -= nEvents;
     }
+    
+    dispatch_index -= nEvents;
+    if (dispatch_index < 0) dispatch_index = 0;
 }

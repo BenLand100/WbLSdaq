@@ -66,6 +66,16 @@ class Digitizer : public VMECard {
  
 };
 
+inline void writeall(const int fd, const void *ptr, int len) {
+    uint8_t *dat = (uint8_t*)ptr;
+    while (len) {
+        int res = write(fd,dat,len);
+        if (res < 0) throw std::runtime_error("writeall failed: "+std::to_string(res));
+        len -= res;
+        dat += res;
+    }
+}
+
 class Decoder {
     
     public:
@@ -75,6 +85,9 @@ class Decoder {
         virtual size_t eventsReady() = 0;
         
         virtual void writeOut(H5::H5File &file, size_t nEvents) = 0;
+        
+        // length, lvdsidx, dsize, nsamples, samples[], strlen, strname[]
+        virtual void dispatch(int nfd, int *fds);
 };
 
 #endif

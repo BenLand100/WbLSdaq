@@ -368,7 +368,7 @@ size_t V1730::readoutBLT_evtsz(char *buffer, size_t buffer_size) {
 
 V1730Decoder::V1730Decoder(size_t _eventBuffer, V1730Settings &_settings) : eventBuffer(_eventBuffer), settings(_settings) {
 
-    decode_counter = chanagg_counter = boardagg_counter = 0;
+    dispatch_index = decode_counter = chanagg_counter = boardagg_counter = 0;
     
     for (size_t ch = 0; ch < 16; ch++) {
         if (settings.getEnabled(ch)) {
@@ -430,6 +430,34 @@ size_t V1730Decoder::eventsReady() {
     return grabs;
 }
 
+// length, lvdsidx, dsize, nsamples, samples[], strlen, strname[]
+
+void V1730Decoder::dispatch(int nfd, int *fds) {
+    
+    size_t ready = eventsReady();
+    
+    for ( ; dispatch_index < ready; dispatch_index++) {
+        for (size_t i = 0; i < nsamples.size(); i++) {
+            uint8_t lvdsidx = patterns[i][dispatch_index] & 0xFF; 
+            uint8_t dsize = 2;
+            uint16_t nsamps = nsamples[i];
+            uint16_t *samples = &grabs[i][nsamps*dispatch_index];
+            string strname = "/"+settings.getIndex()+"/ch" + to_string(idx2chan[i]);
+            uint16_t strlen = strname.length();
+            uint16_t length = 2+strlen+2+nsamps*2+1+1;
+            for (int j = 0; j < nfd; j++) {
+                writeall(fds[j],&length,2);
+                writeall(fds[j],&lvdsidx,1);
+                writeall(fds[j],&dsize,1);
+                writeall(fds[j],&nsamps,2);
+                writeall(fds[j],samples,nsamps*2);
+                writeall(fds[j],&strlen,2);
+                writeall(fds[j],strname.c_str(),strlen);
+            }
+        }
+    }
+}
+
 using namespace H5;
 
 void V1730Decoder::writeOut(H5File &file, size_t nEvents) {
@@ -485,7 +513,7 @@ void V1730Decoder::writeOut(H5File &file, size_t nEvents) {
         cout << "\t" << groupname << "/samples" << endl;
         DataSet samples_ds = file.createDataSet(groupname+"/samples", PredType::NATIVE_UINT16, samplespace);
         samples_ds.write(grabs[i], PredType::NATIVE_UINT16);
-        memcpy(grabs[i],grabs[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
+        memcpy(grabs[i],grabs[i]+nEvents*nsamples[i],nsamples[i]*sizeof(uint16_t)*(grabbed[i]-nEvents));
         
         cout << "\t" << groupname << "/patterns" << endl;
         DataSet patterns_ds = file.createDataSet(groupname+"/patterns", PredType::NATIVE_UINT16, metaspace);
@@ -514,6 +542,9 @@ void V1730Decoder::writeOut(H5File &file, size_t nEvents) {
         
         grabbed[i] -= nEvents;
     }
+    
+    dispatch_index -= nEvents;
+    if (dispatch_index < 0) dispatch_index = 0;
 }
 
 uint32_t* V1730Decoder::decode_chan_agg(uint32_t *chanagg, uint32_t group, uint16_t pattern) {

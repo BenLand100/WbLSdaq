@@ -211,6 +211,8 @@ class V1742Decoder : public Decoder {
         virtual size_t eventsReady();
         
         virtual void writeOut(H5::H5File &file, size_t nEvents);
+        
+        virtual void dispatch(int nfd, int *fds);
 
     protected:
         
@@ -218,6 +220,7 @@ class V1742Decoder : public Decoder {
         V1742calib *calib;
         V1742Settings &settings;
         
+        size_t dispatch_index;
         size_t decode_size;
         size_t group_counter,event_counter,decode_counter;
         struct timespec last_decode_time;

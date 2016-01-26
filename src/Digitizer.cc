@@ -41,3 +41,5 @@ size_t Digitizer::readoutBLT(char *buffer, size_t buffer_size) {
     }
     return offset;
 }
+
+void Decoder::dispatch(int nfd, int *fds) { }

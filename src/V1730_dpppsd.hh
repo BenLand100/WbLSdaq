@@ -266,11 +266,15 @@ class V1730Decoder : public Decoder {
         virtual size_t eventsReady();
         
         virtual void writeOut(H5::H5File &file, size_t nEvents);
+        
+        virtual void dispatch(int nfd, int *fds);
 
     protected:
         
         size_t eventBuffer;
         V1730Settings &settings;
+        
+        size_t dispatch_index;
         
         size_t decode_counter;
         size_t chanagg_counter;
