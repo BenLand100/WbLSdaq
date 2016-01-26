@@ -239,7 +239,7 @@ bool V1730::program(DigitizerSettings &_settings) {
     for (int ch = 0; ch < 16; ch++) {
         channel_enable_mask |= (settings.chans[ch].enabled << ch);
         
-        if (ch % 2 == 0) { 
+        if (ch % 2 == 0) {
             global_trigger_mask |= (settings.groups[ch/2].global_trigger << (ch/2));
             trigger_out_mask |= (settings.groups[ch/2].trg_out << (ch/2));
             

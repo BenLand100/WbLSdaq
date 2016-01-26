@@ -25,6 +25,7 @@
 #include <cmath>
 #include <csignal>
 #include <cstring>
+#include <fstream>
 
 #include "RunDB.hh"
 #include "VMEBridge.hh"
@@ -35,6 +36,183 @@
 
 using namespace std;
 using namespace H5;
+
+class RunType {
+    public:
+        //called just before readout begins
+        virtual void begin() = 0;
+        
+        //called after each read to determine if we need to write files
+        //evtsReady functions as input and output
+        //  IN = number of decoded events from each decoder
+        // OUT = number of decoded events to write to file if result is true
+        virtual bool writeout(std::vector<size_t> &evtsReady) = 0;
+        
+        //called before writing to modify the output filename
+        virtual string fname() = 0;
+        
+        //add any runtype metadata to output file
+        virtual void write(H5File &file) = 0;
+        
+        //called after data is written to add more data or prepare for next file
+        virtual bool keepgoing() = 0;
+        
+};
+
+// Gets fixed numbers of events, optionally splitting into multiple files (repeating)
+// nEvents is the number of events to grab for all cards (0 for continuious run)
+// nRepeat is the number of times to repeat (0 for once, 1 for once, N for multiple)
+class NEventsRun : public RunType {
+    protected:
+        string basename;
+        size_t nEvents, nRepeat, curCycle;
+        double total;
+        struct timespec cur_time, last_time;
+        
+    public: 
+        NEventsRun(string _basename, size_t _nEvents, size_t _nRepeat = 0) : 
+            basename(_basename),
+            nEvents(_nEvents), 
+            nRepeat(_nRepeat), 
+            curCycle(0) { }
+        
+        virtual ~NEventsRun() {
+        }
+        
+        virtual void begin() {
+            clock_gettime(CLOCK_MONOTONIC,&last_time);
+        }
+        
+        virtual bool writeout(std::vector<size_t> &evtsReady) {
+            total = 0.0;
+            bool writeout = nEvents > 0;
+            for (size_t i = 0; i < evtsReady.size(); i++) {
+                total += evtsReady[i];
+                if (evtsReady[i] < nEvents) writeout = false;
+            }
+            total /= evtsReady.size();
+            
+            if (writeout) {
+                for (size_t i = 0; i < evtsReady.size(); i++) {
+                    evtsReady[i] = nEvents;
+                }
+            }
+            
+            if (nRepeat) cout << "Cycle " << curCycle+1 << " / " << nRepeat << endl;
+            
+            clock_gettime(CLOCK_MONOTONIC,&cur_time);
+            double time_int = (cur_time.tv_sec - last_time.tv_sec)+1e-9*(cur_time.tv_nsec - last_time.tv_nsec);
+            cout << "Avg rate " << total/time_int << " Hz" << endl;
+            
+            return writeout;
+        }
+        
+        virtual string fname() {
+            if (nRepeat > 0) {
+                return basename + "." + to_string(curCycle);
+            } else {
+                return basename;
+            }
+        }
+        
+        virtual void write(H5File &file) {
+            double time_int = (cur_time.tv_sec - last_time.tv_sec)+1e-9*(cur_time.tv_nsec - last_time.tv_nsec);
+            
+            DataSpace scalar(0,NULL);
+            Group root = file.openGroup("/");
+            
+            Attribute runtime = root.createAttribute("file_runtime",PredType::NATIVE_DOUBLE,scalar);
+            runtime.write(PredType::NATIVE_DOUBLE,&time_int);
+        }
+        
+        virtual bool keepgoing() {
+            if (nRepeat > 0) {
+                last_time = cur_time;
+                curCycle++;
+                return curCycle != nRepeat;
+            } else {
+                return false;
+            }
+        }
+};
+
+//Runs for a specified amount of time (seconds) splitting files by a certain 
+//number of events (0 means all one file - but watch your buffers). 
+//Assumes event rate is faster than runtime, i.e. the acquisition will stop on 
+//the first event after time runs out.
+class TimedRun : public RunType {
+    protected:
+        string basename;
+        size_t runtime, evtsPerFile, curCycle;
+        double total;
+        struct timespec cur_time, last_time, begin_time;
+        
+    public: 
+        TimedRun(string _basename, size_t _runtime, size_t _evtsPerFile) : 
+            basename(_basename),
+            runtime(_runtime), 
+            evtsPerFile(_evtsPerFile), 
+            curCycle(0) { }
+        
+        virtual ~TimedRun() {
+        }
+        
+        virtual void begin() {
+            clock_gettime(CLOCK_MONOTONIC,&begin_time);
+            clock_gettime(CLOCK_MONOTONIC,&last_time);
+        }
+        
+        virtual bool writeout(std::vector<size_t> &evtsReady) {
+            total = 0.0;
+            bool writeout = evtsPerFile > 0;
+            for (size_t i = 0; i < evtsReady.size(); i++) {
+                total += evtsReady[i];
+                if (evtsReady[i] < evtsPerFile) writeout = false;
+            }
+            total /= evtsReady.size();
+            
+            if (writeout) {
+                for (size_t i = 0; i < evtsReady.size(); i++) {
+                    evtsReady[i] = evtsPerFile;
+                }
+            }
+            
+            if (evtsPerFile > 0) cout << "Cycle " << curCycle+1 << endl;
+            
+            clock_gettime(CLOCK_MONOTONIC,&cur_time);
+            double time_int = (cur_time.tv_sec - last_time.tv_sec)+1e-9*(cur_time.tv_nsec - last_time.tv_nsec);
+            cout << "Avg rate " << total/time_int << " Hz" << endl;
+            
+            time_int = (cur_time.tv_sec - begin_time.tv_sec)+1e-9*(cur_time.tv_nsec - begin_time.tv_nsec);
+            if (time_int >= runtime) writeout = true;
+            
+            return writeout;
+        }
+        
+        virtual string fname() {
+            if (evtsPerFile > 0) {
+                return basename + "." + to_string(curCycle);
+            } else {
+                return basename;
+            }
+        }
+        
+        virtual void write(H5File &file) {
+            double time_int = (cur_time.tv_sec - last_time.tv_sec)+1e-9*(cur_time.tv_nsec - last_time.tv_nsec);
+            
+            DataSpace scalar(0,NULL);
+            Group root = file.openGroup("/");
+            
+            Attribute runtime = root.createAttribute("file_runtime",PredType::NATIVE_DOUBLE,scalar);
+            runtime.write(PredType::NATIVE_DOUBLE,&time_int);
+        }
+        
+        virtual bool keepgoing() {
+            if (evtsPerFile > 0) curCycle++;
+            double time_int = (cur_time.tv_sec - begin_time.tv_sec)+1e-9*(cur_time.tv_nsec - begin_time.tv_nsec);
+            return time_int < runtime;
+        }
+};
 
 bool running;
 
@@ -47,16 +225,16 @@ typedef struct {
     vector<Decoder*> *decoders;
     pthread_mutex_t *iomutex;
     pthread_cond_t *newdata;
-    size_t nEvents, nRepeat, curCycle;
-    string outfile;
+    string config;
+    RunType *runtype;
 } decode_thread_data;
 
 void *decode_thread(void *_data) {
     signal(SIGINT,int_handler);
     decode_thread_data* data = (decode_thread_data*)_data;
-    data->curCycle = 0;
-    struct timespec cur_time, last_time;
-    clock_gettime(CLOCK_MONOTONIC,&last_time);
+    
+    vector<size_t> evtsReady(data->buffers->size());
+    data->runtype->begin();
     try {
         while (running) {
             pthread_mutex_lock(data->iomutex);
@@ -68,50 +246,40 @@ void *decode_thread(void *_data) {
                 if (found) break;
                 pthread_cond_wait(data->newdata,data->iomutex);
             }
-            bool writeout = data->nEvents > 0;
+            
             size_t total = 0;
             for (size_t i = 0; i < data->decoders->size(); i++) {
                 size_t sz = (*data->buffers)[i]->fill();
                 if (sz > 0) (*data->decoders)[i]->decode(*(*data->buffers)[i]);
                 size_t ev = (*data->decoders)[i]->eventsReady();
-                if (ev < data->nEvents && (i == 0)) writeout = false; //FIXME dirty hack to break on first decoder events only
+                evtsReady[i] = ev;
                 total += ev;
             }
             
-            if (data->nRepeat) cout << "Cycle " << data->curCycle+1 << " / " << data->nRepeat << endl;
-            
-            clock_gettime(CLOCK_MONOTONIC,&cur_time);
-            double time_int = (cur_time.tv_sec - last_time.tv_sec)+1e-9*(cur_time.tv_nsec - last_time.tv_nsec);
-            cout << "Avg rate " << ((double)total)/time_int << " Hz" << endl;
-            
-            if (writeout) {
+            if (data->runtype->writeout(evtsReady)) {
                 Exception::dontPrint();
-                string fname = data->outfile;
-                if (data->nRepeat > 0) {
-                    fname += "." + to_string(data->curCycle);
-                    if (++data->curCycle == data->nRepeat) running = false;
-                } else {
-                    running = false;
-                }
-                fname += ".h5"; 
-                cout << "Saving data to " << fname << endl;
-                H5File file(fname, H5F_ACC_TRUNC);
                 
+                string fname = data->runtype->fname() + ".h5"; 
+                cout << "Saving data to " << fname << endl;
+                
+                H5File file(fname, H5F_ACC_TRUNC);
+                data->runtype->write(file);
+                  
                 DataSpace scalar(0,NULL);
                 Group root = file.openGroup("/");
                 
-                Attribute runtime = root.createAttribute("runtime",PredType::NATIVE_DOUBLE,scalar);
-                runtime.write(PredType::NATIVE_DOUBLE,&time_int);
+                Attribute config = root.createAttribute("run_config",PredType::C_S1,scalar);
+                config.write(PredType::C_S1,data->config.c_str());
                 
                 int epochtime = time(NULL);
-                Attribute timestamp = root.createAttribute("unix_timestamp_written",PredType::NATIVE_INT,scalar);
-                runtime.write(PredType::NATIVE_DOUBLE,&epochtime);
+                Attribute timestamp = root.createAttribute("created_unix_timestamp",PredType::NATIVE_INT,scalar);
+                timestamp.write(PredType::NATIVE_INT,&epochtime);
                 
                 for (size_t i = 0; i < data->decoders->size(); i++) {
-                    (*data->decoders)[i]->writeOut(file,i==0 ? data->nEvents : (*data->decoders)[i]->eventsReady()); //FIXME dirty hack as above
+                    (*data->decoders)[i]->writeOut(file,evtsReady[i]);
                 }
                 
-                last_time = cur_time;
+                running = data->runtype->keepgoing();
             }
             pthread_mutex_unlock(data->iomutex);
         }
@@ -141,16 +309,46 @@ int main(int argc, char **argv) {
     db.addFile(argv[1]);
     RunTable run = db.getTable("RUN");
     
-    const int nEvents = run["events"].cast<int>();
-    if (nEvents < 0) running = false;
-    const string outfile = run["outfile"].cast<string>();
+    const string runtypestr = run["runtype"].cast<string>();
+    RunType *runtype = NULL;
+    size_t eventBufferSize = 0;
+    if (runtypestr == "nevents") {
+        const string outfile = run["outfile"].cast<string>();
+        const int nEvents = run["events"].cast<int>();
+        int nRepeat;
+        if (run.isMember("repeat_times")) {
+            nRepeat = run["repeat_times"].cast<int>();
+        } else {
+            nRepeat = 0;
+        }
+        runtype = new NEventsRun(outfile,nEvents,nRepeat);
+        eventBufferSize = nEvents * 1.5;
+    } else if (runtypestr == "timed") {
+        const string outfile = run["outfile"].cast<string>();
+        int evtsPerFile;
+        if (run.isMember("events_per_file")) {
+            evtsPerFile = run["events_per_file"].cast<int>();
+            if (evtsPerFile == 0) {
+                cout << "Cannot do a timed run all in one file - events_per_file must be nonzero" << endl;
+                return -1;
+            }
+        } else {
+            evtsPerFile = 1000; //we need a well defined buffer amount
+        }
+        runtype = new TimedRun(outfile,run["runtime"].cast<int>(),evtsPerFile);
+        eventBufferSize = evtsPerFile*1.5;
+    } 
+    
+    if (!runtype){
+        cout << "Unknown runtype: " << runtypestr << endl;
+        return -1;
+    }
+    
+    //Every run has these options
     const int linknum = run["link_num"].cast<int>();
     const int temptime = run["check_temps_every"].cast<int>();
-    int nRepeat;
-    if (run.isMember("repeat_times")) {
-        nRepeat = run["repeat_times"].cast<int>();
-    } else {
-        nRepeat = 0;
+    if (run.isMember("config_only")) {
+        running = !run["config_only"].cast<bool>();
     }
     
     cout << "Grabbing V1742 calibration..." << endl;
@@ -213,7 +411,7 @@ int main(int argc, char **argv) {
         buffers.push_back(new Buffer(tbl["buffer_size"].cast<int>()*1024*1024));
         if (!digitizers.back()->program(*stngs)) return -1;
         // decoders need settings after programming
-        decoders.push_back(new V1730Decoder((size_t)(nEvents*1.5),*stngs));
+        decoders.push_back(new V1730Decoder(eventBufferSize,*stngs));
     }
     
     for (size_t i = 0; i < v1742s.size(); i++) {
@@ -226,7 +424,7 @@ int main(int argc, char **argv) {
         buffers.push_back(new Buffer(tbl["buffer_size"].cast<int>()*1024*1024));
         if (!digitizers.back()->program(*stngs)) return -1;
         // decoders need settings after programming
-        decoders.push_back(new V1742Decoder((size_t)(nEvents*1.5),v1742calibs[i],*stngs)); 
+        decoders.push_back(new V1742Decoder(eventBufferSize,v1742calibs[i],*stngs)); 
     }
     
     size_t arm_last = 0;
@@ -285,9 +483,13 @@ int main(int argc, char **argv) {
     data.decoders = &decoders;
     data.iomutex = &iomutex;
     data.newdata = &newdata;
-    data.nEvents = nEvents;
-    data.nRepeat = nRepeat;
-    data.outfile = outfile;
+    data.runtype = runtype;
+    { //copy entire config as-is to be saved in each file
+        std::ifstream file(argv[1]);
+        std::stringstream buf;
+        buf << file.rdbuf();
+        data.config = buf.str();
+    }
     pthread_t decode;
     pthread_create(&decode,NULL,&decode_thread,&data);
     
