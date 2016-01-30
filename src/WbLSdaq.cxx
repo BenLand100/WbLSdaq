@@ -123,6 +123,8 @@ class NEventsRun : public RunType {
             
             Attribute runtime = root.createAttribute("file_runtime",PredType::NATIVE_DOUBLE,scalar);
             runtime.write(PredType::NATIVE_DOUBLE,&time_int);
+
+			last_time = cur_time;
         }
         
         virtual bool keepgoing() {
@@ -205,6 +207,8 @@ class TimedRun : public RunType {
             
             Attribute runtime = root.createAttribute("file_runtime",PredType::NATIVE_DOUBLE,scalar);
             runtime.write(PredType::NATIVE_DOUBLE,&time_int);
+
+			last_time = cur_time;
         }
         
         virtual bool keepgoing() {
@@ -313,6 +317,7 @@ int main(int argc, char **argv) {
     RunType *runtype = NULL;
     size_t eventBufferSize = 0;
     if (runtypestr == "nevents") {
+	cout << "Setting up an event limited run..." << endl;
         const string outfile = run["outfile"].cast<string>();
         const int nEvents = run["events"].cast<int>();
         int nRepeat;
@@ -324,6 +329,7 @@ int main(int argc, char **argv) {
         runtype = new NEventsRun(outfile,nEvents,nRepeat);
         eventBufferSize = nEvents * 1.5;
     } else if (runtypestr == "timed") {
+	cout << "Setting up a time limited run..." << endl;
         const string outfile = run["outfile"].cast<string>();
         int evtsPerFile;
         if (run.isMember("events_per_file")) {
