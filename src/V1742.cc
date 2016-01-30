@@ -70,9 +70,11 @@ V1742Settings::V1742Settings(RunTable &dgtz, RunDB &db) : DigitizerSettings(dgtz
             RunTable group = db.getTable(grname,index);
             card.group_enable[gr] = group["enabled"].cast<bool>() ? 1 : 0; //1 bit bool
             vector<double> offsets = group["dc_offsets"].toVector<double>();
+            vector<bool> chmask = group["channel_mask"].toVector<bool>();
             if (offsets.size() != 8) throw runtime_error("Group DC offsets expected to be length 8");
             for (uint32_t ch = 0; ch < 8; ch++) {
                 card.dc_offset[ch+gr*8] = round((-offsets[ch]+1.0)/2.0*pow(2.0,16.0)); //16 bit channel offsets
+                card.channel_mask[gr][ch] = chmask[ch];
             }  
         }
     }
@@ -323,6 +325,9 @@ V1742Decoder::V1742Decoder(size_t _eventBuffer, V1742calib *_calib, V1742Setting
         } else {
             grActive[gr] = false;
         }
+        for (size_t ch = 0; ch < 8; ch++) {
+            chActive[gr][ch] = settings.getChannelMask(gr,ch);
+        }
     }
     
     if (settings.getTRReadout()) {
@@ -502,6 +507,7 @@ void V1742Decoder::dispatch(int nfd, int *fds) {
         for (size_t gr = 0; gr < 4; gr++) {
             if (!grActive[gr]) continue;
             for (size_t ch = 0; ch < 8; ch++) {
+                if (!chActive[gr][ch]) continue;
                 uint8_t lvdsidx = patterns[gr][dispatch_index] & 0xFF; 
                 uint8_t dsize = 2;
                 uint16_t nsamps = nSamples;
@@ -566,6 +572,7 @@ void V1742Decoder::writeOut(H5File &file, size_t nEvents) {
         DataSpace metaspace(1, dimensions);
         
         for (size_t ch = 0; ch < 8; ch++) {
+            if (!chActive[gr][ch]) continue;
             string chname = "ch" + to_string(ch);
             Group chgroup = grgroup.createGroup(chname);
             string chgroupname = "/"+settings.getIndex()+"/"+grname+"/"+chname;

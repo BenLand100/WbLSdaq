@@ -48,6 +48,7 @@ typedef struct {
     uint16_t post_trigger; //10 bit (8.5ns steps)
     uint8_t group_enable[4]; //1 bit bool
     uint8_t max_event_blt; //8 bit events per transfer
+    bool channel_mask[4][8]; //1 bit bool
 } V1742_card_config;
 
 enum V1742SampleFreq {GHz_5, GHz_2_5, GHz_1};
@@ -81,6 +82,10 @@ class V1742Settings : public DigitizerSettings  {
         
         inline bool getGroupEnabled(uint32_t gr) {
             return card.group_enable[gr];
+        }
+
+        inline bool getChannelMask(uint32_t gr, uint32_t ch) {
+            return card.channel_mask[gr][ch];
         }
         
         inline bool getTRReadout() {
@@ -229,6 +234,7 @@ class V1742Decoder : public Decoder {
         
         uint32_t nSamples;
         bool grActive[4];
+	bool chActive[4][8];
         size_t grGrabbed[4];
         uint16_t *samples[4][8];
         uint16_t *start_index[4];
