@@ -271,9 +271,10 @@ void *decode_thread(void *_data) {
                   
                 DataSpace scalar(0,NULL);
                 Group root = file.openGroup("/");
-                
-                Attribute config = root.createAttribute("run_config",PredType::C_S1,scalar);
-                config.write(PredType::C_S1,data->config.c_str());
+               
+                StrType configdtype(PredType::C_S1, data->config.size());
+                Attribute config = root.createAttribute("run_config",configdtype,scalar);
+                config.write(configdtype,data->config.c_str());
                 
                 int epochtime = time(NULL);
                 Attribute timestamp = root.createAttribute("created_unix_timestamp",PredType::NATIVE_INT,scalar);
