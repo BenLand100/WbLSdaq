@@ -317,8 +317,11 @@ int main(int argc, char **argv) {
     const string runtypestr = run["runtype"].cast<string>();
     RunType *runtype = NULL;
     size_t eventBufferSize = 0;
+    if (run.isMember("event_buffer_size")) {
+        eventBufferSize = run["event_buffer_size"].cast<int>();
+    } 
     if (runtypestr == "nevents") {
-	cout << "Setting up an event limited run..." << endl;
+	    cout << "Setting up an event limited run..." << endl;
         const string outfile = run["outfile"].cast<string>();
         const int nEvents = run["events"].cast<int>();
         int nRepeat;
@@ -328,9 +331,9 @@ int main(int argc, char **argv) {
             nRepeat = 0;
         }
         runtype = new NEventsRun(outfile,nEvents,nRepeat);
-        eventBufferSize = nEvents * 1.5;
+        if (!eventBufferSize) eventBufferSize = (size_t)(nEvents*1.5);
     } else if (runtypestr == "timed") {
-	cout << "Setting up a time limited run..." << endl;
+        cout << "Setting up a time limited run..." << endl;
         const string outfile = run["outfile"].cast<string>();
         int evtsPerFile;
         if (run.isMember("events_per_file")) {
@@ -343,9 +346,11 @@ int main(int argc, char **argv) {
             evtsPerFile = 1000; //we need a well defined buffer amount
         }
         runtype = new TimedRun(outfile,run["runtime"].cast<int>(),evtsPerFile);
-        eventBufferSize = evtsPerFile*1.5;
+        if (!eventBufferSize) eventBufferSize = (size_t)(evtsPerFile*1.5);
     } 
     
+    cout << "Using " << eventBufferSize << " event buffers." << endl;
+
     if (!runtype){
         cout << "Unknown runtype: " << runtypestr << endl;
         return -1;
@@ -354,8 +359,9 @@ int main(int argc, char **argv) {
     //Every run has these options
     const int linknum = run["link_num"].cast<int>();
     const int temptime = run["check_temps_every"].cast<int>();
+    bool config_only = false;
     if (run.isMember("config_only")) {
-        running = !run["config_only"].cast<bool>();
+        config_only = run["config_only"].cast<bool>();
     }
     
     cout << "Grabbing V1742 calibration..." << endl;
@@ -503,6 +509,8 @@ int main(int argc, char **argv) {
     struct timespec last_temp_time, cur_time;
     clock_gettime(CLOCK_MONOTONIC,&last_temp_time);
     
+    if (config_only) running = false;
+
     try { 
         while (running) {
         
