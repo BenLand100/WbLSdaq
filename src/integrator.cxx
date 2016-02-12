@@ -31,6 +31,7 @@ class intspec {
         int pedstart, pedend;
         double pedcut;
         int sigstart, sigend;
+        double threshold;
         string name;
         
         intspec(string _group, storagetype _type) : 
@@ -38,14 +39,16 @@ class intspec {
             type(_type),
             pedstart(-1), 
             pedend(-1), 
-            pedcut(0), 
+            pedcut(0.0), 
             sigstart(-1), 
             sigend(-1),
+            threshold(0.0),
             name("") {
         }
         
         bool check() {
-            return !((pedend != -1) ^ (pedend != -1)) && (sigstart != -1) && (sigend != -1) && name.length() != 0;
+            return (threshold == 0.0 ? !((pedend != -1) ^ (pedend != -1)) : (pedend != -1) && (pedend != -1))
+                   && (sigstart != -1) && (sigend != -1) && name.length() != 0;
         }
         
         virtual void init(H5File &file) {
@@ -62,6 +65,8 @@ class intspec {
             ns_sample_attrib.read(PredType::NATIVE_DOUBLE, &ns_sample);
             ps_sample = 1000.0 * ns_sample;
             
+            //convert threshold from mV to ADC here
+            threshold /= V_adc*1000.0;
         }
         
 };
@@ -87,6 +92,7 @@ typedef struct {
     vector<double> pedmean;
     vector<uint8_t> pedvalid;
     vector<double> sigcharge;
+    vector<double> times;
 } intevent;
 
 [[noreturn]] void help() {
@@ -98,7 +104,8 @@ typedef struct {
     cout << "\t-b --pedend sample      specify pedestal end (in samples) for the current group" << endl;
     cout << "\t-x --pedcut mV          specify pedestal fluctuation (in mV) cut for the current group" << endl;
     cout << "\t-c --sigstart sample    specify signal start (in samples) for the current group" << endl;
-    cout << "\t-d --sigend  sample     specify signal end (in samples) for the current group" << endl;
+    cout << "\t-d --sigend sample      specify signal end (in samples) for the current group" << endl;
+    cout << "\t-t --threshold mV       specify mV below pedestal to record first crossing " << endl;
     exit(1);
 }
 
@@ -117,11 +124,12 @@ int main(int argc, char **argv) {
         { "sigstart", 1, NULL, 'c' },
         { "sigend", 1, NULL, 'd' },
         { "pedcut", 1, NULL, 'x' },
+        { "threshold", 1, NULL, 't' },
         { 0, 0, 0, 0 }};
     
     opterr = 0;
     int c;
-    while ((c = getopt_long(argc, argv, ":vm:f:a:b:c:d:x:n:", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, ":vm:f:a:b:c:d:x:t:n:", longopts, NULL)) != -1) {
         switch (c) {
             case 'n':
                 if (!specs.size()) {
@@ -200,6 +208,16 @@ int main(int argc, char **argv) {
                 }
                 specs.back()->pedcut = stod(optarg);
                 break;
+            case 't':
+                if (!specs.size()) {
+                    cout << "Trying to set threshold before setting a group!" << endl;
+                    help();
+                } else if (specs.back()->threshold != 0.0) {
+                    cout << "Trying to set threshold twice for " << specs.back()->group << endl;
+                    help();
+                }
+                specs.back()->threshold = stod(optarg);
+                break;
             case ':':
                 cout << "-" << optopt << " requires an argument" << endl;
                 help();
@@ -251,6 +269,7 @@ int main(int argc, char **argv) {
             cout << " pedcut: " << specs[i]->pedcut;
             cout << " sigstart: " << specs[i]->sigstart;
             cout << " sigend: " << specs[i]->sigend;
+            cout << " threshold: " << specs[i]->threshold;
             cout << endl;
         }
         data[i].traces = 0;
@@ -328,27 +347,39 @@ int main(int argc, char **argv) {
                     pedmean /= (specs[i]->pedend - specs[i]->pedstart);
                     pedmean *= specs[i]->V_adc;
                     intevents[i].pedmean.push_back(1000.0*pedmean);
-                    if (specs[i]->pedcut > 0) {
+                    if (specs[i]->pedcut > 0)
                         intevents[i].pedvalid.push_back((pedmax-pedmin)*specs[i]->V_adc*1000 < specs[i]->pedcut);
-                    } else {
-                        intevents[i].pedvalid.push_back(true);
-                    }
-                } else {
-                    intevents[i].pedmean.push_back(0.0);
-                    intevents[i].pedvalid.push_back(false);
                 }
                 double sigcharge = 0;
-                for (int j = specs[i]->sigstart; j < specs[i]->sigend; j++) {
-                    sigcharge += data[i].data[offset+j];
+                if (specs[i]->threshold == 0.0) {
+                    for (int j = specs[i]->sigstart; j < specs[i]->sigend; j++) {
+                        sigcharge += data[i].data[offset+j];
+                    }
+                } else {
+                    bool crossed = false;
+                    for (int j = specs[i]->sigstart; j < specs[i]->sigend; j++) {
+                        sigcharge += data[i].data[offset+j];
+                        if (!crossed && pedmean-data[i].data[offset+j] > specs[i]->threshold) {
+                            double prev = pedmean-data[i].data[offset+j-1];
+                            double cur = pedmean-data[i].data[offset+j];
+                            intevents[i].times.push_back(specs[i]->ps_sample*((specs[i]->threshold-prev)/(cur-prev)+j));
+                            crossed = true;
+                        }
+                    }
+                    if (!crossed) intevents[i].times.push_back(-1.0);
                 }
                 sigcharge *= specs[i]->V_adc;
                 sigcharge -= pedmean * (specs[i]->sigend - specs[i]->sigstart);
                 sigcharge *= specs[i]->ps_sample;
                 intevents[i].sigcharge.push_back(-sigcharge);
             } else {
-                intevents[i].pedmean.push_back(0.0);
-                intevents[i].pedvalid.push_back(false);
+                if (specs[i]->pedstart != -1) 
+                    intevents[i].pedmean.push_back(0.0);
+                if (specs[i]->pedcut > 0)
+                    intevents[i].pedvalid.push_back(false);
                 intevents[i].sigcharge.push_back(0.0);
+                if (specs[i]->threshold != 0.0)
+                    intevents[i].times.push_back(-1.0);
             }
         }
         
@@ -356,6 +387,7 @@ int main(int argc, char **argv) {
     
     H5File outfile(fprefix+".int.h5", H5F_ACC_TRUNC);
     for (size_t i = 0; i < specs.size(); i++) {
+        if (verbose) cout << "Creating group " << specs[i]->name << endl;
         Group group = outfile.createGroup(specs[i]->name);    
             
         hsize_t dimensions[1];
@@ -363,8 +395,18 @@ int main(int argc, char **argv) {
         
         DataSpace dspace(1, dimensions);
         
-        group.createDataSet("pedmean", PredType::NATIVE_DOUBLE, dspace).write(intevents[i].pedmean.data(), PredType::NATIVE_DOUBLE);
-        group.createDataSet("pedvalid", PredType::NATIVE_UINT8, dspace).write(intevents[i].pedvalid.data(), PredType::NATIVE_UINT8);
+        if (specs[i]->pedstart != -1) {
+            if (verbose) cout << "Creating group " << specs[i]->name << "/" << "pedmean" << endl;
+            group.createDataSet("pedmean", PredType::NATIVE_DOUBLE, dspace).write(intevents[i].pedmean.data(), PredType::NATIVE_DOUBLE);
+        }
+        if (specs[i]->pedcut != 0.0) {
+            if (verbose) cout << "Creating group " << specs[i]->name << "/" << "pedvalid" << endl;
+            group.createDataSet("pedvalid", PredType::NATIVE_UINT8, dspace).write(intevents[i].pedvalid.data(), PredType::NATIVE_UINT8);
+        }
+        if (specs[i]->threshold != 0.0) {
+            if (verbose) cout << "Creating group " << specs[i]->name << "/" << "times" << endl;
+            group.createDataSet("times", PredType::NATIVE_DOUBLE, dspace).write(intevents[i].times.data(), PredType::NATIVE_DOUBLE);
+        }
         group.createDataSet("sigcharge", PredType::NATIVE_DOUBLE, dspace).write(intevents[i].sigcharge.data(), PredType::NATIVE_DOUBLE);
         
     }
