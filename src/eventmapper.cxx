@@ -84,6 +84,8 @@ int main(int argc, char **argv) {
     string fprefix;
     // enable skipping to resync
     bool resync = false;
+    // enable auto-orphaning detected retriggers
+    bool retrigger = true;
     // Extra debug flag
     bool verbose = false;
 
@@ -165,10 +167,18 @@ int main(int argc, char **argv) {
         getPatterns(file, master_group, master_patterns);
         getPatterns(file, fast_group, fast_patterns);
         
+        bool lastorphaned = false;
+
         //loop over triggers
         size_t mi = 0, fi = 0;
         while ((mi < master_patterns.size() && fi < fast_patterns.size()) || (master_overflow.size() && fast_overflow.size())) {
-            
+           
+            if (orphans > max_offset) {
+                cout << "Too many orphans in a row - bailing out." << endl;
+                return 1;
+            }
+
+
             // Populate event with pending or next independently
             event ev;
             if (master_overflow.size()) {
@@ -198,11 +208,50 @@ int main(int argc, char **argv) {
                 cout << "\tmaster_pattern: " << (ev.master.pattern & 0xFF) << " / " << (ev.master.pattern & test_mask) << " / " << (ev.master.pattern & comp_mask); 
                 cout << " fast_pattern: " << (ev.fast.pattern & 0xFF) << " / " << (ev.fast.pattern & test_mask) << " / " << (ev.fast.pattern & comp_mask) << endl;
                 
-                if (resync) {
-                    int mdelta = (ev.master.pattern) - (events.back().master.pattern);
-                    int fdelta = (ev.fast.pattern) - (events.back().fast.pattern);
-                    int delta = (ev.fast.pattern & comp_mask) - (ev.master.pattern & comp_mask);
-                
+                if ((ev.master.pattern ) - 99 == (ev.fast.pattern) ) {
+                    cout << "\tmaster -99 bug..." << endl;
+                    continue;
+                } else if (ev.master.pattern - 99 + 16 == ev.fast.pattern) {
+                    cout << "\tmaster -99+16 bug..." << endl;
+                    continue;
+                } else if (ev.master.pattern - 100 == ev.fast.pattern) {
+                    cout << "\tmaster -100 bug..." << endl;
+                    continue;
+                } else if (ev.master.pattern - 100 + 16 == ev.fast.pattern) {
+                    cout << "\tmaster -100+16 bug..." << endl;
+                    continue;
+                } else if (ev.master.pattern + 156 == ev.fast.pattern) {
+                    cout << "\tmaster +156 bug..." << endl;
+                    continue;
+                } else if (ev.master.pattern + 156 + 16  == ev.fast.pattern) {
+                    cout << "\tmaster -100+16 bug..." << endl;
+                    continue;
+                }
+               int mdelta = (ev.master.pattern) - (events.back().master.pattern);
+               int fdelta = (ev.fast.pattern) - (events.back().fast.pattern);
+               int delta = (ev.fast.pattern & comp_mask) - (ev.master.pattern & comp_mask);
+               
+               if (!lastorphaned && abs(mdelta) == 1 && abs(fdelta) > max_offset) {
+                   master_overflow.push_front(ev.master);
+                   cout << "\tfast jump was orphaned" << endl;
+                   ev.master.file = -1;
+                   ev.master.index = -1;
+                   ev.master.pattern = -1;
+                   fast_orphans++;
+                   orphans++;
+                   continue;
+               } else if (!lastorphaned && abs(fdelta) == 1 && abs(mdelta) > max_offset) {
+                    cout << "\tmaster jump was orphaned" << endl;
+                    fast_overflow.push_front(ev.fast);
+                    ev.fast.file = -1;
+                    ev.fast.index = -1;
+                    ev.fast.pattern = -1;
+                    master_orphans++;
+                    orphans++;
+                    continue;
+               }
+
+               if (resync) { 
                     if (skipped && abs(ev.fast.pattern-ev.master.pattern) < max_offset) {
                         cout << "\tPossibly back on track..." << endl;
                     } else if ((abs(delta) != 1) && (abs(mdelta) > max_offset+skipped || abs(fdelta) > max_offset+skipped)) {
@@ -217,29 +266,49 @@ int main(int argc, char **argv) {
                     }    
                     skipped = 0;
                 }
+
+                if (retrigger) {
+                    if ((ev.master.pattern & test_mask) == (events.back().master.pattern & test_mask)) {
+                        cout << "\tmaster retrigger was orphaned" << endl;
+                        fast_overflow.push_front(ev.fast);
+                        ev.fast.file = -1;
+                        ev.fast.index = -1;
+                        ev.fast.pattern = -1;
+                        master_orphans++;
+                        continue;
+                    } else if ((ev.fast.pattern & test_mask) == (events.back().fast.pattern & test_mask)) {
+                        master_overflow.push_front(ev.master);
+                        cout << "\tfast retrigger was orphaned" << endl;
+                        ev.master.file = -1;
+                        ev.master.index = -1;
+                        ev.master.pattern = -1;
+                        fast_orphans++;
+                        continue;
+                    }
+
+                }
             
-                bool invert = abs((ev.fast.pattern & comp_mask) - (ev.master.pattern & comp_mask)) > max_offset;
-                if (((ev.fast.pattern & comp_mask) > (ev.master.pattern & comp_mask)) != invert) {
-                    cout << "\tmaster was orphaned" << endl;
-                    fast_overflow.push_front(ev.fast);
-                    ev.fast.file = -1;
-                    ev.fast.index = -1;
-                    ev.fast.pattern = -1;
-                    master_orphans++;
-                } else {
-                    master_overflow.push_front(ev.master);
-                    cout << "\tfast was orphaned" << endl;
-                    ev.master.file = -1;
-                    ev.master.index = -1;
-                    ev.master.pattern = -1;
-                    fast_orphans++;
-                }
-                orphans++;
-                if (orphans > max_offset) {
-                    cout << "Too many orphans in a row - bailing out." << endl;
-                    return 1;
-                }
+                bool invert = abs((ev.fast.pattern & comp_mask) - (ev.master.pattern & comp_mask)) > 8;
+                    if (((ev.fast.pattern & comp_mask) > (ev.master.pattern & comp_mask)) != invert) {
+                        cout << "\tmaster was orphaned" << endl;
+                        fast_overflow.push_front(ev.fast);
+                        ev.fast.file = -1;
+                        ev.fast.index = -1;
+                        ev.fast.pattern = -1;
+                        master_orphans++;
+                    } else {
+                        master_overflow.push_front(ev.master);
+                        cout << "\tfast was orphaned" << endl;
+                        ev.master.file = -1;
+                        ev.master.index = -1;
+                        ev.master.pattern = -1;
+                        fast_orphans++;
+                    }
+                    orphans++;
+
+                lastorphaned = true;
             } else {
+                lastorphaned = false;
                 if (verbose) {
                     cout << "Good event - master_file: " << ev.master.file << " master_index:" << ev.master.index;
                     cout << " fast_file: " << ev.fast.file << " fast_index:" << ev.fast.index << endl;

@@ -345,10 +345,9 @@ int main(int argc, char **argv) {
                         if (val < pedmin) pedmin = val;
                     }
                     pedmean /= (specs[i]->pedend - specs[i]->pedstart);
-                    pedmean *= specs[i]->V_adc;
-                    intevents[i].pedmean.push_back(1000.0*pedmean);
+                    intevents[i].pedmean.push_back(1000.0*specs[i]->V_adc*pedmean);
                     if (specs[i]->pedcut > 0)
-                        intevents[i].pedvalid.push_back((pedmax-pedmin)*specs[i]->V_adc*1000 < specs[i]->pedcut);
+                        intevents[i].pedvalid.push_back((pedmax-pedmin)*specs[i]->V_adc*1000.0 < specs[i]->pedcut);
                 }
                 double sigcharge = 0;
                 if (specs[i]->threshold == 0.0) {
@@ -368,10 +367,8 @@ int main(int argc, char **argv) {
                     }
                     if (!crossed) intevents[i].times.push_back(-1.0);
                 }
-                sigcharge *= specs[i]->V_adc;
                 sigcharge -= pedmean * (specs[i]->sigend - specs[i]->sigstart);
-                sigcharge *= specs[i]->ps_sample;
-                intevents[i].sigcharge.push_back(-sigcharge);
+                intevents[i].sigcharge.push_back(-specs[i]->ps_sample * specs[i]->V_adc * sigcharge);
             } else {
                 if (specs[i]->pedstart != -1) 
                     intevents[i].pedmean.push_back(0.0);
