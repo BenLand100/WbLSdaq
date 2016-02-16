@@ -38,22 +38,12 @@ typedef struct {
 [[noreturn]] void help() {
     cout << "eventmapper reads all files that match `${prefix}.${index}.h5` ";
     cout << "respecting the optional bounds on the index and generates ";
-    cout << "an event map as `${prefix}.map.csv` containg correlated events ";
-    cout << "determined by scanning the files and matching sequential events ";
-    cout << "that are equal according to the test mask or ophans which are ";
-    cout << "the lesser of two events according to the comparison mask excepting ";
-    cout << "cases where the offset according to the comparion mask is greater ";
-    cout << "than the specified max offset and the larger is orphaned. In ";
-    cout << "exceptional cases (with -r) when the raw offset is more than the max offset ";
-    cout << "and the patterns do not pass equality events from both cards will ";
-    cout << "be skipped to try to get back on track. This only happens when ";
-    cout << "there are faulty connections on the LVDS inputs." << endl; 
+    cout << "an event map as `${prefix}.map.csv` containg correlated events." << endl;
     cout << "./eventmapper [options] prefix" << endl;
     cout << "\t-v            enable verbose mode" << endl;
-    cout << "\t-r            resync by skipping events until things look right" << endl;
     cout << "\t-s index      force start file index [least]" << endl;
     cout << "\t-e index      force end file index [greatest]" << endl;
-    cout << "\t-t mask       set equality test mask [0xEF]" << endl;
+    cout << "\t-t mask       set equality test mask [0xFF]" << endl;
     cout << "\t-c mask       set comparison mask [0x0F]" << endl;
     cout << "\t-o offset     set max offset used for comparison [8]" << endl;
     cout << "\t-m group      set master pattern group [/fast/gr0/]" << endl;
@@ -67,7 +57,7 @@ typedef struct {
 int main(int argc, char **argv) {
     
     // The bitmask used to compare two patterns for equality
-    uint16_t test_mask = 0xEF; // bit 4 acts up on master, only 8 bits of counter
+    uint16_t test_mask = 0xFF; // only 8 bits of counter
     // The bitmask applied before magnitude comparison when patterns don't match up
     uint16_t comp_mask = 0x0F; // if they don't match... compare the first four
     // If the magnitude is greater than this assume the count rolled over
@@ -82,16 +72,20 @@ int main(int argc, char **argv) {
     int endidx = -1;
     // File prefix to read from
     string fprefix;
-    // enable skipping to resync
-    bool resync = false;
+    // enable accepting discrete offsets for master lvds
+    bool accept_offsets = true;
+    size_t max_offsets = 128;
     // enable auto-orphaning detected retriggers
-    bool retrigger = true;
+    bool orphan_retrigger = true;
+    // enable orphaning of missed triggers
+    bool orphan_missed = true;
+    size_t max_orphans = 8;
     // Extra debug flag
     bool verbose = false;
 
     opterr = 0;
     int c;
-    while ((c = getopt(argc, argv, ":s:e:vrt:c:o:m:f:")) != -1) {
+    while ((c = getopt(argc, argv, ":s:e:vt:c:o:m:f:")) != -1) {
         switch (c) {
             case 's':
                 startidx = stoull(optarg,NULL,0);
@@ -101,9 +95,6 @@ int main(int argc, char **argv) {
                 break;
             case 'v':
                 verbose = true;
-                break;
-            case 'r':
-                resync = true;
                 break;
             case 't':
                 test_mask = stoul(optarg,NULL,0) & 0xFFFF;
@@ -154,7 +145,10 @@ int main(int argc, char **argv) {
 
     vector<event> events;
     list<locator> master_overflow, fast_overflow;
-    size_t skipped = 0, total_skipped = 0, orphans = 0, master_orphans = 0, fast_orphans = 0, total_events = 0;
+    size_t master_retrigger = 0, fast_retrigger = 0;
+    size_t offsets = 0, master_offsets = 0;
+    size_t orphans = 0, master_orphans = 0, fast_orphans = 0;
+    size_t total_events = 0;
     
     //loop over files
     for (int fidx = startidx; fidx <= endidx; fidx++) {
@@ -167,15 +161,19 @@ int main(int argc, char **argv) {
         getPatterns(file, master_group, master_patterns);
         getPatterns(file, fast_group, fast_patterns);
         
-        bool lastorphaned = false;
+        //bool lastorphaned = false;
 
         //loop over triggers
         size_t mi = 0, fi = 0;
         while ((mi < master_patterns.size() && fi < fast_patterns.size()) || (master_overflow.size() && fast_overflow.size())) {
            
-            if (orphans > max_offset) {
+            if (orphans > max_orphans) {
                 cout << "Too many orphans in a row - bailing out." << endl;
-                return 1;
+                exit(1);
+            }
+            if (offsets > max_offsets) {
+                cout << "We've gotten stuck on an offset - bailing out." << endl;
+                exit(1);
             }
 
 
@@ -208,87 +206,111 @@ int main(int argc, char **argv) {
                 cout << "\tmaster_pattern: " << (ev.master.pattern & 0xFF) << " / " << (ev.master.pattern & test_mask) << " / " << (ev.master.pattern & comp_mask); 
                 cout << " fast_pattern: " << (ev.fast.pattern & 0xFF) << " / " << (ev.fast.pattern & test_mask) << " / " << (ev.fast.pattern & comp_mask) << endl;
                 
-                if ((ev.master.pattern ) - 99 == (ev.fast.pattern) ) {
-                    cout << "\tmaster -99 bug..." << endl;
-                    continue;
-                } else if (ev.master.pattern - 99 + 16 == ev.fast.pattern) {
-                    cout << "\tmaster -99+16 bug..." << endl;
-                    continue;
-                } else if (ev.master.pattern - 100 == ev.fast.pattern) {
-                    cout << "\tmaster -100 bug..." << endl;
-                    continue;
-                } else if (ev.master.pattern - 100 + 16 == ev.fast.pattern) {
-                    cout << "\tmaster -100+16 bug..." << endl;
-                    continue;
-                } else if (ev.master.pattern + 156 == ev.fast.pattern) {
-                    cout << "\tmaster +156 bug..." << endl;
-                    continue;
-                } else if (ev.master.pattern + 156 + 16  == ev.fast.pattern) {
-                    cout << "\tmaster -100+16 bug..." << endl;
-                    continue;
-                }
-               int mdelta = (ev.master.pattern) - (events.back().master.pattern);
-               int fdelta = (ev.fast.pattern) - (events.back().fast.pattern);
-               int delta = (ev.fast.pattern & comp_mask) - (ev.master.pattern & comp_mask);
-               
-               if (!lastorphaned && abs(mdelta) == 1 && abs(fdelta) > max_offset) {
-                   master_overflow.push_front(ev.master);
-                   cout << "\tfast jump was orphaned" << endl;
-                   ev.master.file = -1;
-                   ev.master.index = -1;
-                   ev.master.pattern = -1;
-                   fast_orphans++;
-                   orphans++;
-                   continue;
-               } else if (!lastorphaned && abs(fdelta) == 1 && abs(mdelta) > max_offset) {
-                    cout << "\tmaster jump was orphaned" << endl;
-                    fast_overflow.push_front(ev.fast);
-                    ev.fast.file = -1;
-                    ev.fast.index = -1;
-                    ev.fast.pattern = -1;
-                    master_orphans++;
-                    orphans++;
-                    continue;
-               }
-
-               if (resync) { 
-                    if (skipped && abs(ev.fast.pattern-ev.master.pattern) < max_offset) {
-                        cout << "\tPossibly back on track..." << endl;
-                    } else if ((abs(delta) != 1) && (abs(mdelta) > max_offset+skipped || abs(fdelta) > max_offset+skipped)) {
-                        cout << "\tWay off track - skipping (" << skipped << ") events as last ditch effort" << endl;
-                        skipped++;
-                        total_skipped++;
-                        if (skipped > 255) {
-                            cout << "\tWe skipped more events than we can count, bailing out." << endl;
-                            return -1;
-                        }
+                if (accept_offsets) {
+                    if ((ev.master.pattern) - 99 == (ev.fast.pattern) ) {
+                        cout << "\tmaster -99 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
                         continue;
-                    }    
-                    skipped = 0;
+                    } else if (ev.master.pattern - 99 + 16 == ev.fast.pattern) {
+                        cout << "\tmaster -99+16 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
+                        continue;
+                    } else if (ev.master.pattern - 80 == ev.fast.pattern) {
+                        cout << "\tmaster -80 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
+                        continue;
+                    } else if (ev.master.pattern - 80 - 16 == ev.fast.pattern) {
+                        cout << "\tmaster -80-16 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
+                        continue;
+                    } else if (ev.master.pattern - 100 == ev.fast.pattern) {
+                        cout << "\tmaster -100 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
+                        continue;
+                    } else if (ev.master.pattern - 100 + 16 == ev.fast.pattern) {
+                        cout << "\tmaster -100+16 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
+                        continue;
+                    } else if (ev.master.pattern + 156 == ev.fast.pattern) {
+                        cout << "\tmaster +156 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
+                        continue;
+                    } else if (ev.master.pattern + 156 + 16  == ev.fast.pattern) {
+                        cout << "\tmaster +156+16 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
+                        continue;
+                    } else if (ev.master.pattern + 158 == ev.fast.pattern) {
+                        cout << "\tmaster +158 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
+                        continue;
+                    } else if (ev.master.pattern + 158 + 16  == ev.fast.pattern) {
+                        cout << "\tmaster +158+16 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
+                        continue;
+                    } else if (ev.master.pattern + 160  == ev.fast.pattern) {
+                        cout << "\tmaster +160 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
+                        continue;
+                    } else if (ev.master.pattern + 160 + 16  == ev.fast.pattern) {
+                        cout << "\tmaster +160+16 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
+                        continue;
+                    } else if (ev.master.pattern + 173 == ev.fast.pattern) {
+                        cout << "\tmaster +173 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
+                        continue;
+                    } else if (ev.master.pattern + 173 - 16  == ev.fast.pattern) {
+                        cout << "\tmaster +173-16 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
+                        continue;
+                    } else if (ev.master.pattern + 16 == ev.fast.pattern) {
+                        cout << "\tmaster +16 bug..." << endl;
+                        offsets++;
+                        master_offsets++;
+                        continue;
+                    }
+                    offsets = 0;
                 }
 
-                if (retrigger) {
-                    if ((ev.master.pattern & test_mask) == (events.back().master.pattern & test_mask)) {
+                if (orphan_retrigger) {
+                    const uint16_t cmpat = ev.master.pattern;
+                    const uint16_t lmpat = events.back().master.pattern;
+                    // not comprehensive...
+                    if (cmpat-99==lmpat || cmpat-99+16==lmpat || cmpat-100==lmpat || cmpat-100+16==lmpat || cmpat+156==lmpat || cmpat+156-16==lmpat || cmpat+16==lmpat || cmpat == lmpat) {
                         cout << "\tmaster retrigger was orphaned" << endl;
                         fast_overflow.push_front(ev.fast);
                         ev.fast.file = -1;
                         ev.fast.index = -1;
                         ev.fast.pattern = -1;
-                        master_orphans++;
+                        master_retrigger++;
                         continue;
-                    } else if ((ev.fast.pattern & test_mask) == (events.back().fast.pattern & test_mask)) {
+                    } else if (ev.fast.pattern == events.back().fast.pattern) {
                         master_overflow.push_front(ev.master);
                         cout << "\tfast retrigger was orphaned" << endl;
                         ev.master.file = -1;
                         ev.master.index = -1;
                         ev.master.pattern = -1;
-                        fast_orphans++;
+                        fast_retrigger++;
                         continue;
                     }
-
                 }
-            
-                bool invert = abs((ev.fast.pattern & comp_mask) - (ev.master.pattern & comp_mask)) > 8;
+                
+                if (orphan_missed) {
+                    bool invert = abs((ev.fast.pattern & comp_mask) - (ev.master.pattern & comp_mask)) > max_offset;
                     if (((ev.fast.pattern & comp_mask) > (ev.master.pattern & comp_mask)) != invert) {
                         cout << "\tmaster was orphaned" << endl;
                         fast_overflow.push_front(ev.fast);
@@ -296,6 +318,8 @@ int main(int argc, char **argv) {
                         ev.fast.index = -1;
                         ev.fast.pattern = -1;
                         master_orphans++;
+                        orphans++;
+                        continue;
                     } else {
                         master_overflow.push_front(ev.master);
                         cout << "\tfast was orphaned" << endl;
@@ -303,12 +327,16 @@ int main(int argc, char **argv) {
                         ev.master.index = -1;
                         ev.master.pattern = -1;
                         fast_orphans++;
+                        orphans++;
+                        continue;
                     }
-                    orphans++;
+                    orphans = 0;
+                }
+                
+                cout << "No clue what to do with this event - bailing out." << endl;
+                exit(1);
 
-                lastorphaned = true;
             } else {
-                lastorphaned = false;
                 if (verbose) {
                     cout << "Good event - master_file: " << ev.master.file << " master_index:" << ev.master.index;
                     cout << " fast_file: " << ev.fast.file << " fast_index:" << ev.fast.index << endl;
@@ -316,6 +344,7 @@ int main(int argc, char **argv) {
                     cout << " fast_pattern: " << (ev.fast.pattern & 0xFF) << " / " << (ev.fast.pattern & test_mask) << " / " << (ev.fast.pattern & comp_mask) << endl;
                 }
                 orphans = 0;
+                offsets = 0;
             }
              
             // Add the final event to the list
@@ -341,7 +370,8 @@ int main(int argc, char **argv) {
         
     }
     
-    cout << "Events: " << total_events << ", Master Orphans: " << master_orphans << ", Fast Orphans: " << fast_orphans << ", Skipped: " << total_skipped << endl;
+    cout << "Events: " << total_events << ", Master Orphans: " << master_orphans << ", Fast Orphans: " << fast_orphans << endl;
+    cout << "Master Offsets: " << master_offsets << ", Master Retriggers: " << master_retrigger << ", Fast Retrigger: " << fast_retrigger << endl;
     
     //May have some orphans in one or the other overflow (but not both so no checks for correlations)
     while (master_overflow.size()) {
@@ -378,5 +408,3 @@ int main(int argc, char **argv) {
     evmap.close();
     
 }
-    
-    
