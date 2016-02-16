@@ -211,76 +211,106 @@ int main(int argc, char **argv) {
                         cout << "\tmaster -99 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.master.pattern - 99 + 16 == ev.fast.pattern) {
                         cout << "\tmaster -99+16 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.master.pattern - 80 == ev.fast.pattern) {
                         cout << "\tmaster -80 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.master.pattern - 80 - 16 == ev.fast.pattern) {
                         cout << "\tmaster -80-16 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.master.pattern - 100 == ev.fast.pattern) {
                         cout << "\tmaster -100 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.master.pattern - 100 + 16 == ev.fast.pattern) {
                         cout << "\tmaster -100+16 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.master.pattern + 156 == ev.fast.pattern) {
                         cout << "\tmaster +156 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.master.pattern + 156 + 16  == ev.fast.pattern) {
                         cout << "\tmaster +156+16 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.master.pattern + 158 == ev.fast.pattern) {
                         cout << "\tmaster +158 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.master.pattern + 158 + 16  == ev.fast.pattern) {
                         cout << "\tmaster +158+16 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.master.pattern + 160  == ev.fast.pattern) {
                         cout << "\tmaster +160 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.master.pattern + 160 + 16  == ev.fast.pattern) {
                         cout << "\tmaster +160+16 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.master.pattern + 173 == ev.fast.pattern) {
                         cout << "\tmaster +173 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.master.pattern + 173 - 16  == ev.fast.pattern) {
                         cout << "\tmaster +173-16 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.master.pattern + 16 == ev.fast.pattern) {
                         cout << "\tmaster +16 bug..." << endl;
                         offsets++;
                         master_offsets++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     }
                     offsets = 0;
@@ -297,6 +327,8 @@ int main(int argc, char **argv) {
                         ev.fast.index = -1;
                         ev.fast.pattern = -1;
                         master_retrigger++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else if (ev.fast.pattern == events.back().fast.pattern) {
                         master_overflow.push_front(ev.master);
@@ -305,6 +337,8 @@ int main(int argc, char **argv) {
                         ev.master.index = -1;
                         ev.master.pattern = -1;
                         fast_retrigger++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     }
                 }
@@ -319,6 +353,8 @@ int main(int argc, char **argv) {
                         ev.fast.pattern = -1;
                         master_orphans++;
                         orphans++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     } else {
                         master_overflow.push_front(ev.master);
@@ -328,6 +364,8 @@ int main(int argc, char **argv) {
                         ev.master.pattern = -1;
                         fast_orphans++;
                         orphans++;
+                        events.push_back(ev);
+                        total_events++;
                         continue;
                     }
                     orphans = 0;
@@ -345,11 +383,11 @@ int main(int argc, char **argv) {
                 }
                 orphans = 0;
                 offsets = 0;
+                
+                events.push_back(ev);
+                total_events++;
             }
              
-            // Add the final event to the list
-            events.push_back(ev);
-            total_events++;
         }
         
         for (; mi < master_patterns.size(); mi++) {
