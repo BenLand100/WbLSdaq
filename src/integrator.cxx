@@ -24,6 +24,7 @@ enum storagetype { FAST, MASTER };
 
 class intspec {
     public:
+        uint16_t maxval;
         const string group;
         const storagetype type;
         double ps_sample;
@@ -32,6 +33,7 @@ class intspec {
         double pedcut;
         int sigstart, sigend;
         double threshold;
+        int cfdwindow;
         string name;
         
         intspec(string _group, storagetype _type) : 
@@ -43,11 +45,12 @@ class intspec {
             sigstart(-1), 
             sigend(-1),
             threshold(0.0),
+            cfdwindow(-1),
             name("") {
         }
         
         bool check() {
-            return (threshold == 0.0 ? !((pedend != -1) ^ (pedend != -1)) : (pedend != -1) && (pedend != -1))
+            return (threshold == 0.0 ? !((pedend != -1) ^ (pedend != -1)) && (cfdwindow == -1) : (pedend != -1) && (pedend != -1))
                    && (sigstart != -1) && (sigend != -1) && name.length() != 0;
         }
         
@@ -55,10 +58,11 @@ class intspec {
             string card = group.substr(0,group.find("/",1));
             Group card_group = file.openGroup(card.c_str());
             
-            Attribute bits_attrib = card_group.openAttribute("bits");
             uint32_t bits;
+            Attribute bits_attrib = card_group.openAttribute("bits");
             bits_attrib.read(PredType::NATIVE_UINT32, &bits);
-            V_adc = 2.0/pow(2,bits);
+            V_adc = (type == MASTER ? 2.0 : 1.0)/pow(2,bits);
+            maxval = 1<<bits;
             
             Attribute ns_sample_attrib = card_group.openAttribute("ns_sample");
             double ns_sample;
@@ -97,6 +101,7 @@ typedef struct {
 
 [[noreturn]] void help() {
     cout << "./spe [groups] prefix" << endl;
+    cout << "\t-o --outfile filename   specify a filename other than ${prefix}.int.h5" << endl;
     cout << "\t-m --master group       start a group for the master card" << endl;
     cout << "\t-f --fast group         start a group for the fast card" << endl;
     cout << "\t-n --name nickname      specify the name for the group to be saved as" << endl;
@@ -106,16 +111,19 @@ typedef struct {
     cout << "\t-c --sigstart sample    specify signal start (in samples) for the current group" << endl;
     cout << "\t-d --sigend sample      specify signal end (in samples) for the current group" << endl;
     cout << "\t-t --threshold mV       specify mV below pedestal to record first crossing " << endl;
+    cout << "\t-k --cfdwindow samples  look samples ahead for the max value to use CFD" << endl;
     exit(1);
 }
 
 int main(int argc, char **argv) {
     
     string fprefix;
+    string ofname;
     vector<intspec*> specs;
     bool verbose = false;
     
     struct option longopts[] = {
+        { "outfile", 1, NULL, 'o' },
         { "master", 1, NULL, 'm' },
         { "fast", 1, NULL, 'f' },
         { "name", 1, NULL, 'n' },
@@ -125,12 +133,21 @@ int main(int argc, char **argv) {
         { "sigend", 1, NULL, 'd' },
         { "pedcut", 1, NULL, 'x' },
         { "threshold", 1, NULL, 't' },
+        { "cfdwindow", 1, NULL, 'k' },
         { 0, 0, 0, 0 }};
     
     opterr = 0;
     int c;
-    while ((c = getopt_long(argc, argv, ":vm:f:a:b:c:d:x:t:n:", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, ":vo:m:f:a:b:c:d:x:t:n:k:", longopts, NULL)) != -1) {
         switch (c) {
+            case 'o':
+                if (ofname.length() != 0) {
+                    cout << "Trying to set outfile twice!" << endl;
+                    help();
+                } else {
+                    ofname = string(optarg);
+                }
+                break;
             case 'n':
                 if (!specs.size()) {
                     cout << "Trying to set name before setting a group!" << endl;
@@ -218,11 +235,21 @@ int main(int argc, char **argv) {
                 }
                 specs.back()->threshold = stod(optarg);
                 break;
+            case 'k':
+                if (!specs.size()) {
+                    cout << "Trying to set cfdwindow before setting a group!" << endl;
+                    help();
+                } else if (specs.back()->cfdwindow != -1) {
+                    cout << "Trying to set cfdwindow twice for " << specs.back()->group << endl;
+                    help();
+                }
+                specs.back()->cfdwindow = stoull(optarg,NULL,0);
+                break;
             case ':':
-                cout << "-" << optopt << " requires an argument" << endl;
+                cout << "-" << (char)optopt << " requires an argument" << endl;
                 help();
             case '?':
-                cout << "-" << optopt << " is an unknown option" << endl;
+                cout << "-" << (char)optopt << " is an unknown option" << endl;
                 help();
             default:
                 cout << "Unexpected result from getopt" << endl;
@@ -260,7 +287,7 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < specs.size(); i++) {
         specs[i]->init(initfile);
         if (verbose) {
-            cout << "G: " << specs[i]->group;
+            cout << (specs[i]->type == MASTER ? "M" : "F") << ": " << specs[i]->group;
             cout << " N: " << specs[i]->name;
             cout << " V/ADC: " << specs[i]->V_adc;
             cout << " ps/sample: " << specs[i]->ps_sample;
@@ -270,6 +297,7 @@ int main(int argc, char **argv) {
             cout << " sigstart: " << specs[i]->sigstart;
             cout << " sigend: " << specs[i]->sigend;
             cout << " threshold: " << specs[i]->threshold;
+            cout << " cfdwindow: " << specs[i]->cfdwindow;
             cout << endl;
         }
         data[i].traces = 0;
@@ -312,7 +340,7 @@ int main(int argc, char **argv) {
             }
             for (size_t i = 0; i < specs.size(); i++) {
                 if (specs[i]->type == MASTER && !update_master) continue;
-                if (specs[i]->type == FAST && !update_master) continue;
+                if (specs[i]->type == FAST && !update_fast) continue;
                 
                 Group group = master.openGroup(specs[i]->group);
                 DataSet dataset = group.openDataSet("samples");
@@ -327,12 +355,20 @@ int main(int argc, char **argv) {
                 if (data[i].data) delete [] data[i].data;
                 data[i].data = new uint16_t[data[i].traces*data[i].samples];
                 dataset.read(data[i].data,PredType::NATIVE_UINT16,dataspace);
+                
+                // correct for bottom'd out ADC values
+                const size_t total = data[i].traces*data[i].samples;
+                const uint16_t maxval = specs[i]->maxval;
+                uint16_t *dat = data[i].data;
+                for (size_t j = 0; j < total; j++) {
+                    if (dat[j] > maxval) dat[j] = 0;
+                }
             }
         }
         
         //process the event for each group
         for (size_t i = 0; i < specs.size(); i++) {
-            if ((specs[i]->type == MASTER ? mi : fi) > 0) {
+            if ((specs[i]->type == MASTER ? mi : fi) != -1) {
                 const size_t offset = (specs[i]->type == MASTER ? mi : fi)*data[i].samples;
                 double pedmean = 0;
                 if (specs[i]->pedstart != -1) {
@@ -346,8 +382,9 @@ int main(int argc, char **argv) {
                     }
                     pedmean /= (specs[i]->pedend - specs[i]->pedstart);
                     intevents[i].pedmean.push_back(1000.0*specs[i]->V_adc*pedmean);
-                    if (specs[i]->pedcut > 0)
-                        intevents[i].pedvalid.push_back((pedmax-pedmin)*specs[i]->V_adc*1000.0 < specs[i]->pedcut);
+                    if (specs[i]->pedcut > 0) {
+                        intevents[i].pedvalid.push_back((pedmax-pedmin)*specs[i]->V_adc*1000.0 < specs[i]->pedcut ? 1 : 0);
+                    }
                 }
                 double sigcharge = 0;
                 if (specs[i]->threshold == 0.0) {
@@ -359,10 +396,28 @@ int main(int argc, char **argv) {
                     for (int j = specs[i]->sigstart; j < specs[i]->sigend; j++) {
                         sigcharge += data[i].data[offset+j];
                         if (!crossed && pedmean-data[i].data[offset+j] > specs[i]->threshold) {
-                            double prev = pedmean-data[i].data[offset+j-1];
-                            double cur = pedmean-data[i].data[offset+j];
-                            intevents[i].times.push_back(specs[i]->ps_sample*((specs[i]->threshold-prev)/(cur-prev)+j));
-                            crossed = true;
+                            if (specs[i]->cfdwindow != -1) {
+                                const int end = specs[i]->sigend < (j + specs[i]->cfdwindow) ? specs[i]->sigend : (j + specs[i]->cfdwindow);
+                                const int begin = specs[i]->sigstart > (j - specs[i]->cfdwindow) ? specs[i]->sigstart : (j - specs[i]->cfdwindow);
+                                uint16_t peak = pedmean;
+                                for (int k = j; k <= end; k++) if (data[i].data[offset+k] < peak) peak = data[i].data[offset+k];
+                                double thresh = round((pedmean-peak)*0.5);
+                                if (thresh < specs[i]->threshold) continue;
+                                for (int k = begin; k <= end; k++) {
+                                    if (pedmean-data[i].data[offset+k] > thresh) {
+                                        double prev = pedmean-data[i].data[offset+k-1];
+                                        double cur = pedmean-data[i].data[offset+k];
+                                        intevents[i].times.push_back(specs[i]->ps_sample*((thresh-prev)/(cur-prev)+k));
+                                        crossed = true;
+                                        break;
+                                    }
+                                }
+                            } else {
+                                double prev = pedmean-data[i].data[offset+j-1];
+                                double cur = pedmean-data[i].data[offset+j];
+                                intevents[i].times.push_back(specs[i]->ps_sample*((specs[i]->threshold-prev)/(cur-prev)+j));
+                                crossed = true;
+                            }
                         }
                     }
                     if (!crossed) intevents[i].times.push_back(-1.0);
@@ -382,7 +437,9 @@ int main(int argc, char **argv) {
         
     }
     
-    H5File outfile(fprefix+".int.h5", H5F_ACC_TRUNC);
+    
+    if (ofname.length() == 0) ofname = fprefix + ".int.h5";
+    H5File outfile(ofname, H5F_ACC_TRUNC);
     for (size_t i = 0; i < specs.size(); i++) {
         if (verbose) cout << "Creating group " << specs[i]->name << endl;
         Group group = outfile.createGroup(specs[i]->name);    
