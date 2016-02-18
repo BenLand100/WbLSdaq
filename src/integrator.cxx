@@ -10,6 +10,7 @@
 #include <glob.h>
 #include <getopt.h>
 #include <sstream>
+#include <json.hh>
 
 using namespace std;
 using namespace H5;
@@ -36,6 +37,10 @@ class intspec {
         int cfdwindow;
         string name;
         
+        //fast only
+        size_t grnum;
+        vector<double> group_cell_delays;
+        
         intspec(string _group, storagetype _type) : 
             group(_group), 
             type(_type),
@@ -47,6 +52,11 @@ class intspec {
             threshold(0.0),
             cfdwindow(-1),
             name("") {
+            if (type == FAST) {
+                grnum = stoi(group.substr(group.find("gr")+2,1));
+            } else {
+                grnum = -1;
+            }
         }
         
         bool check() {
@@ -90,6 +100,7 @@ class fastintspec : public intspec {
 typedef struct {
     size_t traces, samples;
     uint16_t *data;
+    uint16_t *start_index;
 } sampdata;
 
 typedef struct {
@@ -101,6 +112,7 @@ typedef struct {
 
 [[noreturn]] void help() {
     cout << "./spe [groups] prefix" << endl;
+    cout << "\t-T --timecorr filename  specify a json file with V1742 (fast) time calibration" << endl;
     cout << "\t-o --outfile filename   specify a filename other than ${prefix}.int.h5" << endl;
     cout << "\t-m --master group       start a group for the master card" << endl;
     cout << "\t-f --fast group         start a group for the fast card" << endl;
@@ -119,10 +131,12 @@ int main(int argc, char **argv) {
     
     string fprefix;
     string ofname;
+    string tcorrfname;
     vector<intspec*> specs;
     bool verbose = false;
     
     struct option longopts[] = {
+        { "timecorr", 1, NULL, 'T' },
         { "outfile", 1, NULL, 'o' },
         { "master", 1, NULL, 'm' },
         { "fast", 1, NULL, 'f' },
@@ -138,8 +152,16 @@ int main(int argc, char **argv) {
     
     opterr = 0;
     int c;
-    while ((c = getopt_long(argc, argv, ":vo:m:f:a:b:c:d:x:t:n:k:", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, ":vT:o:m:f:a:b:c:d:x:t:n:k:", longopts, NULL)) != -1) {
         switch (c) {
+            case 'T':
+                if (tcorrfname.length() != 0) {
+                    cout << "Trying to set timecorr twice!" << endl;
+                    help();
+                } else {
+                    tcorrfname = string(optarg);
+                }
+                break;
             case 'o':
                 if (ofname.length() != 0) {
                     cout << "Trying to set outfile twice!" << endl;
@@ -303,6 +325,34 @@ int main(int argc, char **argv) {
         data[i].traces = 0;
         data[i].samples = 0;
         data[i].data = NULL;
+        data[i].start_index = NULL;
+    }
+    
+    if (tcorrfname.length() > 0) {
+        ifstream calibfile(tcorrfname);
+        json::Reader reader(calibfile);
+        json::Value calib;
+        reader.getValue(calib);
+        for (size_t i = 0; i < specs.size(); i++) {
+            if (specs[i]->type == FAST) {
+                json::Value speed;
+                switch ((int)round(specs[i]->ps_sample)) {
+                    case 200:
+                        speed = calib["5GHz"];
+                        break;
+                    case 400:
+                        speed = calib["2.5GHz"];
+                        break;
+                    case 1000:
+                        speed = calib["1GHz"];
+                        break;
+                    default:
+                        cout << "Unknown sample rate.";
+                        exit(1);
+                }
+                specs[i]->group_cell_delays = speed["gr"+to_string(specs[i]->grnum)]["cell_delay"].toVector<double>();
+            }
+        }
     }
     
     // Keep track of the open files
@@ -332,36 +382,63 @@ int main(int argc, char **argv) {
                 if (masterfile != -1) master.close();
                 master.openFile(fprefix+"."+to_string(mf)+".h5", H5F_ACC_RDONLY);
                 masterfile = mf;
+                for (size_t i = 0; i < specs.size(); i++) {
+                    if (specs[i]->type == MASTER) {
+                    
+                        Group group = master.openGroup(specs[i]->group);
+                        DataSet dataset = group.openDataSet("samples");
+
+                        DataSpace dataspace = dataset.getSpace();
+                        int rank = dataspace.getSimpleExtentNdims();
+                        hsize_t *dims = new hsize_t[rank];
+                        dataspace.getSimpleExtentDims(dims);
+
+                        data[i].traces = dims[0];
+                        data[i].samples = dims[1];
+                        if (data[i].data) delete [] data[i].data;
+                        data[i].data = new uint16_t[data[i].traces*data[i].samples];
+                        dataset.read(data[i].data,PredType::NATIVE_UINT16);
+                    
+                    }
+                }
             }
             if (update_fast) {
                 if (fastfile != -1) fast.close();
                 fast.openFile(fprefix+"."+to_string(ff)+".h5", H5F_ACC_RDONLY);
                 fastfile = ff;
-            }
-            for (size_t i = 0; i < specs.size(); i++) {
-                if (specs[i]->type == MASTER && !update_master) continue;
-                if (specs[i]->type == FAST && !update_fast) continue;
-                
-                Group group = master.openGroup(specs[i]->group);
-                DataSet dataset = group.openDataSet("samples");
+                for (size_t i = 0; i < specs.size(); i++) {
+                    if (specs[i]->type == FAST) {
+                        
+                        Group group = fast.openGroup(specs[i]->group);
+                        DataSet dataset = group.openDataSet("samples");
 
-                DataSpace dataspace = dataset.getSpace();
-                int rank = dataspace.getSimpleExtentNdims();
-                hsize_t *dims = new hsize_t[rank];
-                dataspace.getSimpleExtentDims(dims);
+                        DataSpace dataspace = dataset.getSpace();
+                        int rank = dataspace.getSimpleExtentNdims();
+                        hsize_t *dims = new hsize_t[rank];
+                        dataspace.getSimpleExtentDims(dims);
 
-                data[i].traces = dims[0];
-                data[i].samples = dims[1];
-                if (data[i].data) delete [] data[i].data;
-                data[i].data = new uint16_t[data[i].traces*data[i].samples];
-                dataset.read(data[i].data,PredType::NATIVE_UINT16,dataspace);
-                
-                // correct for bottom'd out ADC values
-                const size_t total = data[i].traces*data[i].samples;
-                const uint16_t maxval = specs[i]->maxval;
-                uint16_t *dat = data[i].data;
-                for (size_t j = 0; j < total; j++) {
-                    if (dat[j] > maxval) dat[j] = 0;
+                        data[i].traces = dims[0];
+                        data[i].samples = dims[1];
+                        delete [] dims;
+                        if (data[i].data) delete [] data[i].data;
+                        data[i].data = new uint16_t[data[i].traces*data[i].samples];
+                        dataset.read(data[i].data,PredType::NATIVE_UINT16);
+                        
+                        Group grgroup = fast.openGroup(specs[i]->group.substr(0,specs[i]->group.find("/",specs[i]->group.find("/",1)+1)+1));
+                        DataSet sidataset = grgroup.openDataSet("start_index");
+                        if (data[i].start_index) delete [] data[i].start_index;
+                        data[i].start_index = new uint16_t[data[i].traces];
+                        sidataset.read(data[i].start_index,PredType::NATIVE_UINT16);
+                    
+                        // correct for bottom'd out ADC values
+                        const size_t total = data[i].traces*data[i].samples;
+                        const uint16_t maxval = specs[i]->maxval;
+                        uint16_t *dat = data[i].data;
+                        for (size_t j = 0; j < total; j++) {
+                            if (dat[j] > maxval) dat[j] = 0;
+                        }
+                        
+                    }
                 }
             }
         }
@@ -369,7 +446,8 @@ int main(int argc, char **argv) {
         //process the event for each group
         for (size_t i = 0; i < specs.size(); i++) {
             if ((specs[i]->type == MASTER ? mi : fi) != -1) {
-                const size_t offset = (specs[i]->type == MASTER ? mi : fi)*data[i].samples;
+                const size_t index = specs[i]->type == MASTER ? mi : fi;
+                const size_t offset = index*data[i].samples;
                 double pedmean = 0;
                 if (specs[i]->pedstart != -1) {
                     uint16_t pedmin = 0xFFFF;
@@ -420,7 +498,24 @@ int main(int argc, char **argv) {
                             }
                         }
                     }
-                    if (!crossed) intevents[i].times.push_back(-1.0);
+                    if (crossed) { 
+                        //TIME CORRECTION CODE
+                        if (specs[i]->type == FAST) {
+                            const uint16_t start_cell = data[i].start_index[index];
+                            const double crossing = intevents[i].times.back();
+                            const double residual = crossing-round(crossing);
+                            const size_t sample = round(crossing)/specs[i]->ps_sample;
+                            const size_t cell = (start_cell+sample)%1024;
+                            const double t0 = specs[i]->group_cell_delays[start_cell];
+                            const double tcross = specs[i]->group_cell_delays[cell];
+                            const double tnext = specs[i]->group_cell_delays[(cell+1)%1024];
+                            const double tfine = (tnext-tcross > 0.0 ? tnext-tcross : tnext-tcross+1.024*specs[i]->ps_sample)*residual;
+                            
+                            intevents[i].times.back() = 1000.0 * ((tcross - t0 > 0.0 ? tcross - t0 : tcross - t0 + 1.024*specs[i]->ps_sample) + tfine);
+                        }
+                    } else {
+                        intevents[i].times.push_back(-1.0);
+                    }
                 }
                 sigcharge -= pedmean * (specs[i]->sigend - specs[i]->sigstart);
                 intevents[i].sigcharge.push_back(-specs[i]->ps_sample * specs[i]->V_adc * sigcharge);
