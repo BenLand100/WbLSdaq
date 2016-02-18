@@ -513,32 +513,32 @@ void V1730Decoder::writeOut(H5File &file, size_t nEvents) {
         cout << "\t" << groupname << "/samples" << endl;
         DataSet samples_ds = file.createDataSet(groupname+"/samples", PredType::NATIVE_UINT16, samplespace);
         samples_ds.write(grabs[i], PredType::NATIVE_UINT16);
-        memcpy(grabs[i],grabs[i]+nEvents*nsamples[i],nsamples[i]*sizeof(uint16_t)*(grabbed[i]-nEvents));
+        memmove(grabs[i],grabs[i]+nEvents*nsamples[i],nsamples[i]*sizeof(uint16_t)*(grabbed[i]-nEvents));
         
         cout << "\t" << groupname << "/patterns" << endl;
         DataSet patterns_ds = file.createDataSet(groupname+"/patterns", PredType::NATIVE_UINT16, metaspace);
         patterns_ds.write(patterns[i], PredType::NATIVE_UINT16);
-        memcpy(patterns[i],patterns[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
+        memmove(patterns[i],patterns[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
         
         cout << "\t" << groupname << "/baselines" << endl;
         DataSet baselines_ds = file.createDataSet(groupname+"/baselines", PredType::NATIVE_UINT16, metaspace);
         baselines_ds.write(baselines[i], PredType::NATIVE_UINT16);
-        memcpy(baselines[i],baselines[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
+        memmove(baselines[i],baselines[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
         
         cout << "\t" << groupname << "/qshorts" << endl;
         DataSet qshorts_ds = file.createDataSet(groupname+"/qshorts", PredType::NATIVE_UINT16, metaspace);
         qshorts_ds.write(qshorts[i], PredType::NATIVE_UINT16);
-        memcpy(qshorts[i],qshorts[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
+        memmove(qshorts[i],qshorts[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
         
         cout << "\t" << groupname << "/qlongs" << endl;
         DataSet qlongs_ds = file.createDataSet(groupname+"/qlongs", PredType::NATIVE_UINT16, metaspace);
         qlongs_ds.write(qlongs[i], PredType::NATIVE_UINT16);
-        memcpy(qlongs[i],qlongs[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
+        memmove(qlongs[i],qlongs[i]+nEvents,sizeof(uint16_t)*(grabbed[i]-nEvents));
 
         cout << "\t" << groupname << "/times" << endl;
         DataSet times_ds = file.createDataSet(groupname+"/times", PredType::NATIVE_UINT64, metaspace);
         times_ds.write(times[i], PredType::NATIVE_UINT64);
-        memcpy(times[i],times[i]+nEvents,sizeof(uint64_t)*(grabbed[i]-nEvents));
+        memmove(times[i],times[i]+nEvents,sizeof(uint64_t)*(grabbed[i]-nEvents));
         
         grabbed[i] -= nEvents;
     }

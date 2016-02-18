@@ -50,7 +50,7 @@ class Buffer {
             w_ptr += amt;
             if ((size_t)(r_ptr - buffer) >= size) {
                 const size_t total = w_ptr - r_ptr;
-                memcpy(buffer,r_ptr,total);
+                memmove(buffer,r_ptr,total);
                 r_ptr = buffer;
                 w_ptr = buffer + total;
             }

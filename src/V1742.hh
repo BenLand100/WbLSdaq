@@ -234,7 +234,7 @@ class V1742Decoder : public Decoder {
         
         uint32_t nSamples;
         bool grActive[4];
-	bool chActive[4][8];
+        bool chActive[4][8];
         size_t grGrabbed[4];
         uint16_t *samples[4][8];
         uint16_t *start_index[4];

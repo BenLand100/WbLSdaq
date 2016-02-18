@@ -207,110 +207,13 @@ int main(int argc, char **argv) {
                 cout << " fast_pattern: " << (ev.fast.pattern & 0xFF) << " / " << (ev.fast.pattern & test_mask) << " / " << (ev.fast.pattern & comp_mask) << endl;
                 
                 if (accept_offsets) {
-                    if ((ev.master.pattern) - 99 == (ev.fast.pattern) ) {
-                        cout << "\tmaster -99 bug..." << endl;
-                        offsets++;
-                        master_offsets++;
-                        events.push_back(ev);
-                        total_events++;
-                        continue;
-                    } else if (ev.master.pattern - 99 + 16 == ev.fast.pattern) {
-                        cout << "\tmaster -99+16 bug..." << endl;
-                        offsets++;
-                        master_offsets++;
-                        events.push_back(ev);
-                        total_events++;
-                        continue;
-                    } else if (ev.master.pattern - 80 == ev.fast.pattern) {
-                        cout << "\tmaster -80 bug..." << endl;
-                        offsets++;
-                        master_offsets++;
-                        events.push_back(ev);
-                        total_events++;
-                        continue;
-                    } else if (ev.master.pattern - 80 - 16 == ev.fast.pattern) {
-                        cout << "\tmaster -80-16 bug..." << endl;
-                        offsets++;
-                        master_offsets++;
-                        events.push_back(ev);
-                        total_events++;
-                        continue;
-                    } else if (ev.master.pattern - 100 == ev.fast.pattern) {
-                        cout << "\tmaster -100 bug..." << endl;
-                        offsets++;
-                        master_offsets++;
-                        events.push_back(ev);
-                        total_events++;
-                        continue;
-                    } else if (ev.master.pattern - 100 + 16 == ev.fast.pattern) {
-                        cout << "\tmaster -100+16 bug..." << endl;
-                        offsets++;
-                        master_offsets++;
-                        events.push_back(ev);
-                        total_events++;
-                        continue;
-                    } else if (ev.master.pattern + 156 == ev.fast.pattern) {
-                        cout << "\tmaster +156 bug..." << endl;
-                        offsets++;
-                        master_offsets++;
-                        events.push_back(ev);
-                        total_events++;
-                        continue;
-                    } else if (ev.master.pattern + 156 + 16  == ev.fast.pattern) {
-                        cout << "\tmaster +156+16 bug..." << endl;
-                        offsets++;
-                        master_offsets++;
-                        events.push_back(ev);
-                        total_events++;
-                        continue;
-                    } else if (ev.master.pattern + 158 == ev.fast.pattern) {
-                        cout << "\tmaster +158 bug..." << endl;
-                        offsets++;
-                        master_offsets++;
-                        events.push_back(ev);
-                        total_events++;
-                        continue;
-                    } else if (ev.master.pattern + 158 + 16  == ev.fast.pattern) {
-                        cout << "\tmaster +158+16 bug..." << endl;
-                        offsets++;
-                        master_offsets++;
-                        events.push_back(ev);
-                        total_events++;
-                        continue;
-                    } else if (ev.master.pattern + 160  == ev.fast.pattern) {
-                        cout << "\tmaster +160 bug..." << endl;
-                        offsets++;
-                        master_offsets++;
-                        events.push_back(ev);
-                        total_events++;
-                        continue;
-                    } else if (ev.master.pattern + 160 + 16  == ev.fast.pattern) {
-                        cout << "\tmaster +160+16 bug..." << endl;
-                        offsets++;
-                        master_offsets++;
-                        events.push_back(ev);
-                        total_events++;
-                        continue;
-                    } else if (ev.master.pattern + 173 == ev.fast.pattern) {
-                        cout << "\tmaster +173 bug..." << endl;
-                        offsets++;
-                        master_offsets++;
-                        events.push_back(ev);
-                        total_events++;
-                        continue;
-                    } else if (ev.master.pattern + 173 - 16  == ev.fast.pattern) {
-                        cout << "\tmaster +173-16 bug..." << endl;
-                        offsets++;
-                        master_offsets++;
-                        events.push_back(ev);
-                        total_events++;
-                        continue;
-                    } else if (ev.master.pattern + 16 == ev.fast.pattern) {
+                    if (ev.master.pattern + 16 == ev.fast.pattern) {
                         cout << "\tmaster +16 bug..." << endl;
                         offsets++;
                         master_offsets++;
                         events.push_back(ev);
                         total_events++;
+                        orphans = 0;
                         continue;
                     }
                     offsets = 0;
@@ -320,7 +223,7 @@ int main(int argc, char **argv) {
                     const uint16_t cmpat = ev.master.pattern;
                     const uint16_t lmpat = events.back().master.pattern;
                     // not comprehensive...
-                    if (cmpat-99==lmpat || cmpat-99+16==lmpat || cmpat-100==lmpat || cmpat-100+16==lmpat || cmpat+156==lmpat || cmpat+156-16==lmpat || cmpat+16==lmpat || cmpat == lmpat) {
+                    if (cmpat-16==lmpat || cmpat+16==lmpat || cmpat == lmpat) {
                         cout << "\tmaster retrigger was orphaned" << endl;
                         fast_overflow.push_front(ev.fast);
                         ev.fast.file = -1;
@@ -329,6 +232,7 @@ int main(int argc, char **argv) {
                         master_retrigger++;
                         events.push_back(ev);
                         total_events++;
+                        orphans = 0;
                         continue;
                     } else if (ev.fast.pattern == events.back().fast.pattern) {
                         master_overflow.push_front(ev.master);
@@ -339,12 +243,13 @@ int main(int argc, char **argv) {
                         fast_retrigger++;
                         events.push_back(ev);
                         total_events++;
+                        orphans = 0;
                         continue;
                     }
                 }
                 
                 if (orphan_missed) {
-                    bool invert = abs((ev.fast.pattern & comp_mask) - (ev.master.pattern & comp_mask)) > max_offset;
+                    bool invert = (size_t)abs((ev.fast.pattern & comp_mask) - (ev.master.pattern & comp_mask)) > max_offset;
                     if (((ev.fast.pattern & comp_mask) > (ev.master.pattern & comp_mask)) != invert) {
                         cout << "\tmaster was orphaned" << endl;
                         fast_overflow.push_front(ev.fast);

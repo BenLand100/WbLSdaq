@@ -586,29 +586,29 @@ void V1742Decoder::writeOut(H5File &file, size_t nEvents) {
             cout << "\t" << chgroupname << "/samples" << endl;
             DataSet samples_ds = file.createDataSet(chgroupname+"/samples", PredType::NATIVE_UINT16, samplespace);
             samples_ds.write(samples[gr][ch], PredType::NATIVE_UINT16);
-            memcpy(samples[gr][ch],samples[gr][ch]+nEvents*nSamples,sizeof(uint16_t)*nSamples*(grGrabbed[gr]-nEvents));
+            memmove(samples[gr][ch],samples[gr][ch]+nEvents*nSamples,sizeof(uint16_t)*nSamples*(grGrabbed[gr]-nEvents));
             
         }
             
         cout << "\t" << grgroupname << "/start_index" << endl;
         DataSet start_index_ds = file.createDataSet(grgroupname+"/start_index", PredType::NATIVE_UINT16, metaspace);
         start_index_ds.write(start_index[gr], PredType::NATIVE_UINT16);
-        memcpy(start_index[gr],start_index[gr]+nEvents,sizeof(uint16_t)*(grGrabbed[gr]-nEvents));
+        memmove(start_index[gr],start_index[gr]+nEvents,sizeof(uint16_t)*(grGrabbed[gr]-nEvents));
         
         cout << "\t" << grgroupname << "/patterns" << endl;
         DataSet patterns_ds = file.createDataSet(grgroupname+"/patterns", PredType::NATIVE_UINT16, metaspace);
         patterns_ds.write(patterns[gr], PredType::NATIVE_UINT16);
-        memcpy(patterns[gr],patterns[gr]+nEvents,sizeof(uint16_t)*(grGrabbed[gr]-nEvents));
+        memmove(patterns[gr],patterns[gr]+nEvents,sizeof(uint16_t)*(grGrabbed[gr]-nEvents));
             
         cout << "\t" << grgroupname << "/trigger_time" << endl;
         DataSet trigger_time_ds = file.createDataSet(grgroupname+"/trigger_time", PredType::NATIVE_UINT32, metaspace);
         trigger_time_ds.write(trigger_time[gr], PredType::NATIVE_UINT32);
-        memcpy(trigger_time[gr],trigger_time[gr]+nEvents,sizeof(uint32_t)*(grGrabbed[gr]-nEvents));
+        memmove(trigger_time[gr],trigger_time[gr]+nEvents,sizeof(uint32_t)*(grGrabbed[gr]-nEvents));
         
         cout << "\t" << grgroupname << "/trigger_count" << endl;
         DataSet trigger_count_ds = file.createDataSet(grgroupname+"/trigger_count", PredType::NATIVE_UINT32, metaspace);
         trigger_count_ds.write(trigger_count[gr], PredType::NATIVE_UINT32);
-        memcpy(trigger_count[gr],trigger_count[gr]+nEvents,sizeof(uint32_t)*(grGrabbed[gr]-nEvents));
+        memmove(trigger_count[gr],trigger_count[gr]+nEvents,sizeof(uint32_t)*(grGrabbed[gr]-nEvents));
         
         grGrabbed[gr] -= nEvents;
     }
