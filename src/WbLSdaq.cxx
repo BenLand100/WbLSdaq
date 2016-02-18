@@ -37,6 +37,11 @@
 using namespace std;
 using namespace H5;
 
+
+bool stop;
+bool readout_running;
+bool decode_running;
+
 class RunType {
     public:
         //called just before readout begins
@@ -218,10 +223,9 @@ class TimedRun : public RunType {
         }
 };
 
-bool running;
-
 void int_handler(int x) {
-    running = false;
+    if (stop) exit(1);
+    stop = true;
 }
 
 typedef struct {
@@ -240,10 +244,11 @@ void *decode_thread(void *_data) {
     vector<size_t> evtsReady(data->buffers->size());
     data->runtype->begin();
     try {
-        while (running) {
+        decode_running = true;
+        while (decode_running) {
             pthread_mutex_lock(data->iomutex);
             for (;;) {
-                bool found = !running;
+                bool found = stop;
                 for (size_t i = 0; i < data->buffers->size(); i++) {
                     found |= (*data->buffers)[i]->fill() > 0;
                 }
@@ -260,7 +265,9 @@ void *decode_thread(void *_data) {
                 total += ev;
             }
             
-            if (data->runtype->writeout(evtsReady)) {
+            if (stop && total == 0) {
+                decode_running = false;
+            } else if (stop || data->runtype->writeout(evtsReady)) {
                 Exception::dontPrint();
                 
                 string fname = data->runtype->fname() + ".h5"; 
@@ -284,13 +291,14 @@ void *decode_thread(void *_data) {
                     (*data->decoders)[i]->writeOut(file,evtsReady[i]);
                 }
                 
-                running = data->runtype->keepgoing();
+                decode_running = data->runtype->keepgoing();
             }
             pthread_mutex_unlock(data->iomutex);
         }
+        stop = true;
     } catch (runtime_error &e) {
         pthread_mutex_unlock(data->iomutex);
-        running = false;
+        stop = true;
         pthread_mutex_lock(data->iomutex);
         cout << "Decode thread aborted: " << e.what() << endl;
         pthread_mutex_unlock(data->iomutex);
@@ -305,7 +313,8 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    running = true;
+    stop = false;
+    readout_running = decode_running = false;
     signal(SIGINT,int_handler);
 
     cout << "Reading configuration..." << endl;
@@ -448,7 +457,7 @@ int main(int argc, char **argv) {
     
     cout << "Waiting for HV to stabilize..." << endl;
     
-    while (running) {
+    while (!stop) {
         bool busy = false;
         bool warning = false;
         for (size_t i = 0; i < hvs.size(); i++) {
@@ -509,13 +518,13 @@ int main(int argc, char **argv) {
     struct timespec last_temp_time, cur_time;
     clock_gettime(CLOCK_MONOTONIC,&last_temp_time);
     
-    if (config_only) running = false;
+    if (config_only) stop = true;
 
     try { 
-        while (running) {
-        
+        readout_running = true;
+        while (readout_running && !stop) {
             //Digitizer loop
-            for (size_t i = 0; i < digitizers.size() && running; i++) {
+            for (size_t i = 0; i < digitizers.size() && !stop; i++) {
                 Digitizer *dgtz = digitizers[i];
                 if (dgtz->readoutReady()) {
                     buffers[i]->inc(dgtz->readoutBLT(buffers[i]->wptr(),buffers[i]->free()));
@@ -525,7 +534,7 @@ int main(int argc, char **argv) {
                     pthread_mutex_lock(&iomutex);
                     cout << "Digitizer " << settings[i]->getIndex() << " aborted acquisition!" << endl;
                     pthread_mutex_unlock(&iomutex);
-                    running = false;
+                    stop = true;
                 }
             }
             
@@ -536,7 +545,7 @@ int main(int argc, char **argv) {
                 last_temp_time = cur_time;
                 cout << "Temperature check..." << endl;
                 bool overtemp = false;
-                for (size_t i = 0; i < digitizers.size() && running; i++) {
+                for (size_t i = 0; i < digitizers.size() && !stop; i++) {
                     overtemp |= digitizers[i]->checkTemps(temps,60);
                     cout << settings[i]->getIndex() << " : [ " << temps[0];
                     for (size_t t = 1; t < temps.size(); t++) cout << ", " << temps[t];
@@ -544,19 +553,21 @@ int main(int argc, char **argv) {
                 }
                 if (overtemp) {
                     cout << "Overtemp! Aborting readout." << endl;
-                    running  = false;
+                    stop = true;
                 }
                 pthread_mutex_unlock(&iomutex);
             }
         } 
+        readout_running = false;
     } catch (exception &e) {
-        running = false;
+        readout_running = false;
         pthread_mutex_unlock(&iomutex);
         pthread_mutex_lock(&iomutex);
         cout << "Readout thread aborted: " << e.what() << endl;
         pthread_mutex_unlock(&iomutex);
     }
     
+    stop = true;
     pthread_mutex_lock(&iomutex);
     cout << "Stopping acquisition..." << endl;
     pthread_mutex_unlock(&iomutex);
@@ -570,6 +581,9 @@ int main(int argc, char **argv) {
         digitizers[i]->stopAcquisition();
     }
     pthread_cond_signal(&newdata);
+    
+    //busy wait for all data to be written out
+    while (decode_running) { sleep(1); }
     
     // Should add some logic to cleanup memory, but we're done anyway
     
