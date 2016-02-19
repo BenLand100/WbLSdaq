@@ -41,6 +41,7 @@ typedef struct {
     cout << "an event map as `${prefix}.map.csv` containg correlated events." << endl;
     cout << "./eventmapper [options] prefix" << endl;
     cout << "\t-v            enable verbose mode" << endl;
+    cout << "\t-g            give up on LVDS correlations" << endl;
     cout << "\t-s index      force start file index [least]" << endl;
     cout << "\t-e index      force end file index [greatest]" << endl;
     cout << "\t-t mask       set equality test mask [0xFF]" << endl;
@@ -80,12 +81,14 @@ int main(int argc, char **argv) {
     // enable orphaning of missed triggers
     bool orphan_missed = true;
     size_t max_orphans = 8;
+    // yolo - don't worry with lvds
+    bool giveup = false;
     // Extra debug flag
     bool verbose = false;
 
     opterr = 0;
     int c;
-    while ((c = getopt(argc, argv, ":s:e:vt:c:o:m:f:")) != -1) {
+    while ((c = getopt(argc, argv, ":s:e:vt:c:o:m:f:g")) != -1) {
         switch (c) {
             case 's':
                 startidx = stoull(optarg,NULL,0);
@@ -111,6 +114,9 @@ int main(int argc, char **argv) {
             case 'f':
                 fast_group = string(optarg);
                 break;
+            case 'g':
+                giveup = true;
+                break;
             case ':':
                 cout << "-" << optopt << " requires an argument" << endl;
                 help();
@@ -121,6 +127,12 @@ int main(int argc, char **argv) {
                 cout << "Unexpected result from getopt" << endl;
                 help();
         }
+    }
+    
+    if (giveup) {
+        cout << "************ WARNING **************" << endl;
+        cout << " Giving up on trigger correlations " << endl;
+        cout << "************ WARNING **************" << endl;
     }
 
     if (argc - optind != 1) help();
@@ -160,8 +172,6 @@ int main(int argc, char **argv) {
         vector<uint16_t> master_patterns, fast_patterns;
         getPatterns(file, master_group, master_patterns);
         getPatterns(file, fast_group, fast_patterns);
-        
-        //bool lastorphaned = false;
 
         //loop over triggers
         size_t mi = 0, fi = 0;
@@ -199,7 +209,7 @@ int main(int argc, char **argv) {
             }
             
             // One of the two triggers might be an orphan
-            if ((ev.master.pattern & test_mask) != (ev.fast.pattern & test_mask)) {
+            if (!giveup && ((ev.master.pattern & test_mask) != (ev.fast.pattern & test_mask))) {
                 
                 cout << "Discontinuity found - master_file: " << ev.master.file << " master_index:" << ev.master.index;
                 cout << " fast_file: " << ev.fast.file << " fast_index:" << ev.fast.index << endl;
