@@ -229,7 +229,7 @@ int main(int argc, char **argv) {
                     offsets = 0;
                 }
 
-                if (orphan_retrigger) {
+                if (orphan_retrigger && events.size()) {
                     const uint16_t cmpat = ev.master.pattern;
                     const uint16_t lmpat = events.back().master.pattern;
                     // not comprehensive...
