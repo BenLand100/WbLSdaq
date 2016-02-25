@@ -97,12 +97,6 @@ class NEventsRun : public RunType {
             }
             total /= evtsReady.size();
             
-            if (writeout) {
-                for (size_t i = 0; i < evtsReady.size(); i++) {
-                    evtsReady[i] = nEvents;
-                }
-            }
-            
             if (nRepeat) cout << "Cycle " << curCycle+1 << " / " << nRepeat << endl;
             
             clock_gettime(CLOCK_MONOTONIC,&cur_time);
@@ -177,12 +171,6 @@ class TimedRun : public RunType {
                 if (evtsReady[i] < evtsPerFile) writeout = false;
             }
             total /= evtsReady.size();
-            
-            if (writeout) {
-                for (size_t i = 0; i < evtsReady.size(); i++) {
-                    evtsReady[i] = evtsPerFile;
-                }
-            }
             
             if (evtsPerFile > 0) cout << "Cycle " << curCycle+1 << endl;
             
