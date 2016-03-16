@@ -154,6 +154,13 @@ int main(int argc, char **argv) {
         if (startidx < 0) startidx = min;
         if (endidx < 0) endidx = max;
     }
+    
+    ofstream evmap;
+    evmap.open(fprefix+".map.csv");
+    if (!evmap.is_open()) {
+        cout << "Cannot open output file!" << endl;
+        return 1;
+    }
 
     vector<event> events;
     list<locator> master_overflow, fast_overflow;
@@ -348,8 +355,6 @@ int main(int argc, char **argv) {
         fast_orphans++;
     }
     
-    ofstream evmap;
-    evmap.open(fprefix+".map.csv");
     evmap << "\"event_index\", \"master_file\", \"master_index\", \"fast_file\", \"fast_index\"" << endl;
     for (size_t i = 0; i < events.size(); i++) {
         evmap << i << ", ";
