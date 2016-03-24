@@ -602,7 +602,6 @@ uint32_t* V1730Decoder::decode_chan_agg(uint32_t *chanagg, uint32_t group, uint1
             qshorts[idx][ev] = event[1+samples/2+1] & 0x7FFF;
             qlongs[idx][ev] = (event[1+samples/2+1] >> 16) & 0xFFFF;
             times[idx][ev] = ((uint64_t)(event[0] & 0x7FFFFFFF)) | (((uint64_t)(event[1+samples/2+0]&0xFFFF0000))<<15);
-            if (idx == 0) cout << times[idx][ev] << endl;
         } else {
             grabbed[idx]++;
         }
