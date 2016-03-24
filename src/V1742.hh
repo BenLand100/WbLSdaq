@@ -88,7 +88,7 @@ class V1742Settings : public DigitizerSettings  {
             return card.channel_mask[gr][ch];
         }
         
-        inline bool getTRReadout() {
+        inline bool getTrReadout() {
             return card.tr_readout;
         }
         
@@ -112,6 +112,14 @@ class V1742Settings : public DigitizerSettings  {
         
         inline uint32_t getDCOffset(uint32_t ch) {
             return card.dc_offset[ch];
+        }
+        
+        inline uint32_t getTrDCOffset(uint32_t tr) {
+            switch (tr) {
+                case 0: return card.tr0_dc_offset;
+                case 1: return card.tr1_dc_offset;
+                default: throw std::runtime_error("Invalid triger line");
+            }
         }
     
     protected:
@@ -241,8 +249,8 @@ class V1742Decoder : public Decoder {
         uint16_t *patterns[4];
         uint32_t *trigger_count[4];
         uint32_t *trigger_time[4];
-        bool trActive[2];
-        uint16_t *tr_samples[2];
+        bool trnActive[4];
+        uint16_t *trn_samples[4];
         
         uint32_t* decode_event_structure(uint32_t *event);
         

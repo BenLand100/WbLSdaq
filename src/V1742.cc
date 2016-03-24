@@ -330,14 +330,15 @@ V1742Decoder::V1742Decoder(size_t _eventBuffer, V1742calib *_calib, V1742Setting
         }
     }
     
-    if (settings.getTRReadout()) {
-        trActive[0] = trActive[1] = true;
-        if (eventBuffer) {
-            tr_samples[0] = new uint16_t[eventBuffer*nSamples];
-            tr_samples[1] = new uint16_t[eventBuffer*nSamples];
+    if (settings.getTrReadout() && eventBuffer) {
+        for (size_t gr = 0; gr < 4; gr++) {
+            if (settings.getGroupEnabled(gr)) {
+                trn_samples[gr] = new uint16_t[eventBuffer*nSamples];
+                trnActive[gr] = true;
+            }
         }
     } else {
-        trActive[0] = trActive[1] = false;
+        trnActive[0] = trnActive[1] = trnActive[2] = trnActive[3] = false;
     }
     
     clock_gettime(CLOCK_MONOTONIC,&last_decode_time);
@@ -357,9 +358,8 @@ V1742Decoder::~V1742Decoder() {
                 delete [] trigger_count[gr];
                 delete [] trigger_time[gr];
             }
+            if (trnActive[gr]) delete [] trn_samples[gr];
         }
-        if (trActive[0]) delete [] tr_samples[0];
-        if (trActive[1]) delete [] tr_samples[1];
     }
 }
 
@@ -446,7 +446,7 @@ uint32_t* V1742Decoder::decode_group_structure(uint32_t *group, uint32_t gr) {
     uint32_t size = group[0] & 0xFFF;
     
     if (size/3 != nSamples) throw runtime_error("Recieved sample length " + to_string(size/3) + " does not match expected " + to_string(nSamples) + " (" + to_string(gr) + ")");
-    if (tr && !trActive[gr<3 ? 0 : 1]) throw runtime_error("Received TR"+to_string(gr<3 ? 0 : 1)+" data when not marked for readout (" + to_string(gr) + ")");
+    if (tr && !settings.getTrReadout()) throw runtime_error("Received TR"+to_string(gr/2)+" data when not marked for readout (" + to_string(gr) + ")");
     
     group_counter++;
     
@@ -469,17 +469,17 @@ uint32_t* V1742Decoder::decode_group_structure(uint32_t *group, uint32_t gr) {
             data[7][s] = (word[2]>>20)&0xFFF;
         }
         
-        if (tr) {
-            uint16_t *tr = tr_samples[gr<3 ? 0 : 1] + ev*nSamples;
+        if (tr && trnActive[gr]) {
+            uint16_t *data = trn_samples[gr] + ev*nSamples;
             for (size_t s = 0; s < nSamples; word += 3) {
-                tr[s++] = word[0]&0xFFF;
-                tr[s++] = (word[0]>>12)&0xFFF;
-                tr[s++] = ((word[1]&0xF)<<8)|((word[0]>>24)&0xFF);
-                tr[s++] = (word[1]>>4)&0xFFF;
-                tr[s++] = (word[1]>>16)&0xFFF;
-                tr[s++] = ((word[2]&0xFF)<<4)|((word[1]>>28)&0xF);
-                tr[s++] = (word[2]>>8)&0xFFF;
-                tr[s++] = (word[2]>>20)&0xFFF;
+                data[s++] = word[0]&0xFFF;
+                data[s++] = (word[0]>>12)&0xFFF;
+                data[s++] = ((word[1]&0xF)<<8)|((word[0]>>24)&0xFF);
+                data[s++] = (word[1]>>4)&0xFFF;
+                data[s++] = (word[1]>>16)&0xFFF;
+                data[s++] = ((word[2]&0xFF)<<4)|((word[1]>>28)&0xF);
+                data[s++] = (word[2]>>8)&0xFFF;
+                data[s++] = (word[2]>>20)&0xFFF;
             }
         }
         
@@ -587,7 +587,23 @@ void V1742Decoder::writeOut(H5File &file, size_t nEvents) {
             DataSet samples_ds = file.createDataSet(chgroupname+"/samples", PredType::NATIVE_UINT16, samplespace);
             samples_ds.write(samples[gr][ch], PredType::NATIVE_UINT16);
             memmove(samples[gr][ch],samples[gr][ch]+nEvents*nSamples,sizeof(uint16_t)*nSamples*(grGrabbed[gr]-nEvents));
+        }
+        
+        if (trnActive[gr]) {
+            string chname = "tr";
+            Group chgroup = grgroup.createGroup(chname);
+            string chgroupname = "/"+settings.getIndex()+"/"+grname+"/"+chname;
             
+            cout << "\t" << chgroupname << endl;
+        
+            Attribute offset = chgroup.createAttribute("offset",PredType::NATIVE_UINT32,scalar);
+            ival = settings.getTrDCOffset(gr/2);
+            offset.write(PredType::NATIVE_UINT32,&ival);
+            
+            cout << "\t" << chgroupname << "/samples" << endl;
+            DataSet samples_ds = file.createDataSet(chgroupname+"/samples", PredType::NATIVE_UINT16, samplespace);
+            samples_ds.write(trn_samples[gr], PredType::NATIVE_UINT16);
+            memmove(trn_samples[gr],trn_samples[gr]+nEvents*nSamples,sizeof(uint16_t)*nSamples*(grGrabbed[gr]-nEvents));
         }
             
         cout << "\t" << grgroupname << "/start_index" << endl;
