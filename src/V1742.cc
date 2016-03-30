@@ -116,7 +116,7 @@ V1742calib::V1742calib(CAEN_DGTZ_DRS4Correction_t *dat) {
         for (size_t i = 0; i < 1024; i++) {
             groups[gr].cell_delay[i] = cal.time[i];
         }
-        for (size_t ch = 0; ch < 8; ch++) {
+        for (size_t ch = 0; ch < 9; ch++) {
             for (size_t i = 0; i < 1024; i++) {
                 groups[gr].chans[ch].cell_offset[i] = cal.cell[ch][i];
                 groups[gr].chans[ch].seq_offset[i] = cal.nsample[ch][i];
@@ -129,25 +129,35 @@ V1742calib::~V1742calib() {
 
 }
 
-void V1742calib::calibrate(uint16_t *samples[4][8], size_t sampPerEv, uint16_t *start_index[4], bool grActive[4], size_t numEv) {
+void V1742calib::calibrate(uint16_t *samples[4][8], uint16_t *trn_samples[4], size_t sampPerEv, uint16_t *start_index[4], bool grActive[4], bool trActive[4], size_t numEv) {
     
     cout << "\tCalibrating V1742 data..." << endl;
     
     for (size_t gr = 0; gr < 4; gr++) {
         if (!grActive[gr]) continue;
         for (size_t ev = 0; ev < numEv; ev++) {
-            uint16_t *samps[8];
+            uint16_t *samps[9];
             uint16_t cellidx = start_index[gr][ev];
-            for (size_t ch = 0; ch < 8; ch++) {
-                samps[ch] = samples[gr][ch]+ev*sampPerEv;
+            for (size_t ch = 0; ch < (trActive[gr] ? 9 : 8); ch++) {
+                if (ch < 8) {
+                    samps[ch] = samples[gr][ch]+ev*sampPerEv;
+                } else {
+                    samps[ch] = trn_samples[gr]+ev*sampPerEv;
+                }
                 //Apply CAEN offsets 
                 for (size_t i = 0; i < sampPerEv; i++) {
+                    if (samps[ch][i] == 0 || samps[ch][i] == 4095) continue; //don't correct rails
                     samps[ch][i] = samps[ch][i] - groups[gr].chans[ch].seq_offset[i] - groups[gr].chans[ch].cell_offset[(cellidx+i)%1024];
+                    if (samps[ch][i] >= 0xF000) {
+                        samps[ch][i] = 0; //fix correction below lower rail
+                    } else if (samps[ch][i] >= 0x0FFF) {
+                        samps[ch][i] = 0x0FFF; //fix correction above upper rail 
+                    }
                 }
             }
             for (size_t i = 0; i < sampPerEv; i++) {
                 int identified = 0;
-                for (size_t ch = 0; ch < 8; ch++) {
+                for (size_t ch = 0; ch < (trActive[gr] ? 9 : 8); ch++) {
                     if (samps[ch][i]-samps[ch][(i+1)%sampPerEv] > 30 && samps[ch][(i+3)%sampPerEv]-samps[ch][(i+2)%sampPerEv] > 30) {
                         identified++;
                     }
@@ -533,7 +543,7 @@ using namespace H5;
 
 void V1742Decoder::writeOut(H5File &file, size_t nEvents) {
 
-    if (calib) calib->calibrate(samples, nSamples, start_index, grActive, nEvents);
+    if (calib) calib->calibrate(samples, trn_samples, nSamples, start_index, grActive, trnActive, nEvents);
 
     cout << "\t/" << settings.getIndex() << endl;
 

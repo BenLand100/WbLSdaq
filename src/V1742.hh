@@ -137,13 +137,13 @@ class V1742calib {
         
         virtual ~V1742calib();
         
-        virtual void calibrate(uint16_t *samples[4][8], size_t sampPerEv, uint16_t *start_index[4], bool grActive[4], size_t num);
+        virtual void calibrate(uint16_t *samples[4][8], uint16_t *trn_samples[4], size_t sampPerEv, uint16_t *start_index[4], bool grActive[4], bool trActive[4], size_t num);
         
     protected:
         struct {
             struct {
                 int cell_offset[1024], seq_offset[1024];
-            } chans[8]; 
+            } chans[9]; 
             int cell_delay[1024];   
         } groups[4];
 
