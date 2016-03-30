@@ -408,7 +408,6 @@ int main(int argc, char **argv) {
                 fastfile = ff;
                 for (size_t i = 0; i < specs.size(); i++) {
                     if (specs[i]->type == FAST) {
-                        
                         Group group = fast.openGroup(specs[i]->group);
                         DataSet dataset = group.openDataSet("samples");
 
@@ -416,7 +415,7 @@ int main(int argc, char **argv) {
                         int rank = dataspace.getSimpleExtentNdims();
                         hsize_t *dims = new hsize_t[rank];
                         dataspace.getSimpleExtentDims(dims);
-
+                        
                         data[i].traces = dims[0];
                         data[i].samples = dims[1];
                         delete [] dims;
@@ -437,7 +436,6 @@ int main(int argc, char **argv) {
                         for (size_t j = 0; j < total; j++) {
                             if (dat[j] > maxval) dat[j] = 0;
                         }
-                        
                     }
                 }
             }
@@ -471,34 +469,46 @@ int main(int argc, char **argv) {
                     }
                 } else {
                     bool crossed = false;
-                    for (int j = specs[i]->sigstart; j < specs[i]->sigend; j++) {
-                        sigcharge += data[i].data[offset+j];
-                        if (!crossed && pedmean-data[i].data[offset+j] > specs[i]->threshold) {
-                            if (specs[i]->cfdwindow != -1) {
-                                const int end = specs[i]->sigend < (j + specs[i]->cfdwindow) ? specs[i]->sigend : (j + specs[i]->cfdwindow);
-                                const int begin = specs[i]->sigstart > (j - specs[i]->cfdwindow) ? specs[i]->sigstart : (j - specs[i]->cfdwindow);
-                                uint16_t peak = pedmean;
-                                for (int k = j; k <= end; k++) if (data[i].data[offset+k] < peak) peak = data[i].data[offset+k];
-                                double thresh = round((pedmean-peak)*0.5);
-                                if (thresh < specs[i]->threshold) continue;
-                                for (int k = begin; k <= end; k++) {
-                                    if (pedmean-data[i].data[offset+k] > thresh) {
-                                        double prev = pedmean-data[i].data[offset+k-1];
-                                        double cur = pedmean-data[i].data[offset+k];
-                                        intevents[i].times.push_back(specs[i]->ps_sample*((thresh-prev)/(cur-prev)+k));
-                                        crossed = true;
-                                        break;
+                    if (specs[i]->threshold > 0.0) { //downward going pulses
+                        for (int j = specs[i]->sigstart; j < specs[i]->sigend; j++) {
+                            sigcharge += data[i].data[offset+j];
+                            if (!crossed && pedmean-data[i].data[offset+j] > specs[i]->threshold) {
+                                if (specs[i]->cfdwindow != -1) {
+                                    const int end = specs[i]->sigend < (j + specs[i]->cfdwindow) ? specs[i]->sigend : (j + specs[i]->cfdwindow);
+                                    const int begin = specs[i]->sigstart > (j - specs[i]->cfdwindow) ? specs[i]->sigstart : (j - specs[i]->cfdwindow);
+                                    uint16_t peak = pedmean;
+                                    for (int k = j; k <= end; k++) if (data[i].data[offset+k] < peak) peak = data[i].data[offset+k];
+                                    double thresh = round((pedmean-peak)*0.5);
+                                    if (thresh < specs[i]->threshold) continue;
+                                    for (int k = begin; k <= end; k++) {
+                                        if (pedmean-data[i].data[offset+k] > thresh) {
+                                            const double prev = pedmean-data[i].data[offset+k-1];
+                                            const double cur = pedmean-data[i].data[offset+k];
+                                            intevents[i].times.push_back(specs[i]->ps_sample*((thresh-prev)/(cur-prev)+k));
+                                            crossed = true;
+                                            break;
+                                        }
                                     }
+                                } else {
+                                    const double prev = pedmean-data[i].data[offset+j-1];
+                                    const double cur = pedmean-data[i].data[offset+j];
+                                    intevents[i].times.push_back(specs[i]->ps_sample*((specs[i]->threshold-prev)/(cur-prev)+j));
+                                    crossed = true;
                                 }
-                            } else {
-                                double prev = pedmean-data[i].data[offset+j-1];
-                                double cur = pedmean-data[i].data[offset+j];
-                                intevents[i].times.push_back(specs[i]->ps_sample*((specs[i]->threshold-prev)/(cur-prev)+j));
+                            }
+                        }
+                    } else { //upward going pulses
+                        for (int j = specs[i]->sigstart; j < specs[i]->sigend; j++) {
+                            sigcharge += data[i].data[offset+j];
+                            if (!crossed && pedmean-data[i].data[offset+j] < specs[i]->threshold) {
+                                const double prev = data[i].data[offset+j-1]-pedmean;
+                                const double cur = data[i].data[offset+j]-pedmean;
+                                intevents[i].times.push_back(specs[i]->ps_sample*((-specs[i]->threshold-prev)/(cur-prev)+j));
                                 crossed = true;
                             }
                         }
                     }
-                    if (crossed) { 
+                    if (tcorrfname.length() > 0 && crossed) { 
                         //TIME CORRECTION CODE
                         if (specs[i]->type == FAST) {
                             const uint16_t start_cell = data[i].start_index[index];
