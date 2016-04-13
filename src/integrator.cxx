@@ -36,6 +36,7 @@ class intspec {
         double threshold;
         int cfdwindow;
         string name;
+        bool rawtraces;
         
         //fast only
         size_t grnum;
@@ -108,14 +109,17 @@ typedef struct {
     vector<uint8_t> pedvalid;
     vector<double> sigcharge;
     vector<double> times;
+    vector<double> traces;
 } intevent;
 
 [[noreturn]] void help() {
     cout << "./spe [groups] prefix" << endl;
     cout << "\t-T --timecorr filename  specify a json file with V1742 (fast) time calibration" << endl;
     cout << "\t-o --outfile filename   specify a filename other than ${prefix}.int.h5" << endl;
+    cout << "\t-S --skim file          specify a skim file to use instead of an event map" << endl;
     cout << "\t-m --master group       start a group for the master card" << endl;
     cout << "\t-f --fast group         start a group for the fast card" << endl;
+    cout << "\t-R --rawtraces          save the raw traces for the current group" << endl;
     cout << "\t-n --name nickname      specify the name for the group to be saved as" << endl;
     cout << "\t-a --pedstart sample    specify pedestal start (in samples) for the current group" << endl;
     cout << "\t-b --pedend sample      specify pedestal end (in samples) for the current group" << endl;
@@ -130,6 +134,7 @@ typedef struct {
 int main(int argc, char **argv) {
     
     string fprefix;
+    string skimfile;
     string ofname;
     string tcorrfname;
     vector<intspec*> specs;
@@ -148,11 +153,13 @@ int main(int argc, char **argv) {
         { "pedcut", 1, NULL, 'x' },
         { "threshold", 1, NULL, 't' },
         { "cfdwindow", 1, NULL, 'k' },
+        { "rawtraces", 1, NULL, 'R' },
+        { "skim", 1, NULL, 'S' },
         { 0, 0, 0, 0 }};
     
     opterr = 0;
     int c;
-    while ((c = getopt_long(argc, argv, ":vT:o:m:f:a:b:c:d:x:t:n:k:", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, ":vT:o:m:f:a:b:c:d:x:t:n:k:S:R", longopts, NULL)) != -1) {
         switch (c) {
             case 'T':
                 if (tcorrfname.length() != 0) {
@@ -196,6 +203,16 @@ int main(int argc, char **argv) {
                     help();
                 }
                 specs.push_back(new fastintspec(optarg));
+                break;
+            case 'R':
+                if (!specs.size()) {
+                    cout << "Trying to set rawtraces before setting a group!" << endl;
+                    help();
+                } else if (specs.back()->rawtraces) {
+                    cout << "Trying to set rawtraces twice for " << specs.back()->group << endl;
+                    help();
+                }
+                specs.back()->rawtraces = true;
                 break;
             case 'a':
                 if (!specs.size()) {
@@ -266,6 +283,14 @@ int main(int argc, char **argv) {
                     help();
                 }
                 specs.back()->cfdwindow = stoull(optarg,NULL,0);
+                break;
+            case 'S':
+                if (skimfile.length() != 0) {
+                    cout << "Trying to set skimfile twice!" << endl;
+                    help();
+                } else {
+                    skimfile = string(optarg);
+                }
                 break;
             case ':':
                 cout << "-" << (char)optopt << " requires an argument" << endl;
@@ -359,8 +384,13 @@ int main(int argc, char **argv) {
     int64_t masterfile = -1, fastfile = -1;
     H5File master, fast;
     
-    // Read the event map to get events
-    ifstream eventmap(fprefix+".map.csv");
+    // Read the event map or skim file to get events
+    ifstream eventmap;
+    if (skimfile.length()) {
+        eventmap.open(skimfile);
+    } else {
+        eventmap.open(fprefix+".map.csv");
+    }
     if (!eventmap.is_open()) {
         cout << "Could not open event map!" << endl;
         exit(1);
@@ -462,6 +492,11 @@ int main(int argc, char **argv) {
                         intevents[i].pedvalid.push_back((pedmax-pedmin)*specs[i]->V_adc*1000.0 < specs[i]->pedcut ? 1 : 0);
                     }
                 }
+                if (specs[i]->rawtraces) {
+                    for (size_t j = 0; j < data[i].samples; j++) {
+                        intevents[i].traces.push_back((data[i].data[offset+j]-pedmean)*specs[i]->V_adc*1000.0);
+                    }
+                }
                 double sigcharge = 0;
                 if (specs[i]->threshold == 0.0) {
                     for (int j = specs[i]->sigstart; j < specs[i]->sigend; j++) {
@@ -534,6 +569,11 @@ int main(int argc, char **argv) {
                     intevents[i].pedmean.push_back(0.0);
                 if (specs[i]->pedcut > 0)
                     intevents[i].pedvalid.push_back(false);
+                if (specs[i]->rawtraces) {
+                    for (size_t j = 0; j < data[i].samples; j++) {
+                        intevents[i].traces.push_back(0);
+                    }
+                }
                 intevents[i].sigcharge.push_back(0.0);
                 if (specs[i]->threshold != 0.0)
                     intevents[i].times.push_back(-1.0);
@@ -549,8 +589,9 @@ int main(int argc, char **argv) {
         if (verbose) cout << "Creating group " << specs[i]->name << endl;
         Group group = outfile.createGroup(specs[i]->name);    
             
-        hsize_t dimensions[1];
+        hsize_t dimensions[2];
         dimensions[0] = intevents[i].sigcharge.size();
+        if (specs[i]->rawtraces) dimensions[1] = intevents[i].traces.size()/intevents[i].sigcharge.size();
         
         DataSpace dspace(1, dimensions);
         
@@ -565,6 +606,10 @@ int main(int argc, char **argv) {
         if (specs[i]->threshold != 0.0) {
             if (verbose) cout << "Creating group " << specs[i]->name << "/" << "times" << endl;
             group.createDataSet("times", PredType::NATIVE_DOUBLE, dspace).write(intevents[i].times.data(), PredType::NATIVE_DOUBLE);
+        }
+        if (specs[i]->rawtraces) {
+            DataSpace sspace(2, dimensions);
+            group.createDataSet("traces", PredType::NATIVE_DOUBLE, sspace).write(intevents[i].traces.data(), PredType::NATIVE_DOUBLE);
         }
         group.createDataSet("sigcharge", PredType::NATIVE_DOUBLE, dspace).write(intevents[i].sigcharge.data(), PredType::NATIVE_DOUBLE);
         
