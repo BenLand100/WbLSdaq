@@ -122,6 +122,10 @@ class NEventsRun : public RunType {
             
             Attribute runtime = root.createAttribute("file_runtime",PredType::NATIVE_DOUBLE,scalar);
             runtime.write(PredType::NATIVE_DOUBLE,&time_int);
+            
+            uint32_t timestamp = time(NULL);
+            Attribute tstampattr = root.createAttribute("creation_time",PredType::NATIVE_UINT32,scalar);
+            tstampattr.write(PredType::NATIVE_UINT32,&timestamp);
 
 			last_time = cur_time;
         }
@@ -200,6 +204,12 @@ class TimedRun : public RunType {
             
             Attribute runtime = root.createAttribute("file_runtime",PredType::NATIVE_DOUBLE,scalar);
             runtime.write(PredType::NATIVE_DOUBLE,&time_int);
+
+            
+            uint32_t timestamp = time(NULL);
+            Attribute tstampattr = root.createAttribute("creation_time",PredType::NATIVE_UINT32,scalar);
+            tstampattr.write(PredType::NATIVE_UINT32,&timestamp);
+
 
 			last_time = cur_time;
         }
