@@ -427,6 +427,7 @@ int main(int argc, char **argv) {
         V1730Settings *stngs = new V1730Settings(tbl,db);
         settings.push_back(stngs);
         digitizers.push_back(new V1730(bridge,tbl["base_address"].cast<int>()));
+        ((V1730*)digitizers.back())->stopAcquisition();
         ((V1730*)digitizers.back())->calib();
         buffers.push_back(new Buffer(tbl["buffer_size"].cast<int>()*1024*1024));
         if (!digitizers.back()->program(*stngs)) return -1;
@@ -440,6 +441,7 @@ int main(int argc, char **argv) {
         V1742Settings *stngs = v1742settings[i];
         settings.push_back(stngs);
         V1742 *card = new V1742(bridge,tbl["base_address"].cast<int>());
+        card->stopAcquisition();
         digitizers.push_back(card);
         buffers.push_back(new Buffer(tbl["buffer_size"].cast<int>()*1024*1024));
         if (!digitizers.back()->program(*stngs)) return -1;
@@ -496,6 +498,8 @@ int main(int argc, char **argv) {
     }
     for (size_t i = 0; i < lescopes.size(); i++) {
         lescopes[i]->normal();
+        delete lescopes[i]; //get rid of these until the acquisition is done
+        lescopes[i] = NULL;
     }
     
     decode_thread_data data;
@@ -570,8 +574,14 @@ int main(int argc, char **argv) {
     cout << "Stopping acquisition..." << endl;
     pthread_mutex_unlock(&iomutex);
     
-    for (size_t i = 0; i < lescopes.size(); i++) {
-        lescopes[i]->stop();
+    for (size_t i = 0; i < lecroy6zis.size(); i++) {
+        RunTable &tbl = lecroy6zis[i];
+        try { //want to make sure this doesn't ever cause a crash
+            LeCroy6Zi *tmpscope = new LeCroy6Zi(tbl["host"].cast<string>(),tbl["port"].cast<int>(),tbl["timeout"].cast<double>());
+            tmpscope->stop();
+        } catch (runtime_error &e) {
+            cout << "Could not stop scope! : " << e.what() << endl;
+        }
     }
     if (digitizers.size() > 0) digitizers[arm_last]->stopAcquisition();
     for (size_t i = 0; i < digitizers.size(); i++) {
