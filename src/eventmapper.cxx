@@ -218,14 +218,10 @@ int main(int argc, char **argv) {
             // One of the two triggers might be an orphan
             if (!giveup && ((ev.master.pattern & test_mask) != (ev.fast.pattern & test_mask))) {
                 
-                cout << "Discontinuity found - master_file: " << ev.master.file << " master_index:" << ev.master.index;
-                cout << " fast_file: " << ev.fast.file << " fast_index:" << ev.fast.index << endl;
-                cout << "\tmaster_pattern: " << (ev.master.pattern & 0xFF) << " / " << (ev.master.pattern & test_mask) << " / " << (ev.master.pattern & comp_mask); 
-                cout << " fast_pattern: " << (ev.fast.pattern & 0xFF) << " / " << (ev.fast.pattern & test_mask) << " / " << (ev.fast.pattern & comp_mask) << endl;
-                
                 if (accept_offsets) {
+                    //This happens so often we just ignore it now, don't even debug it
                     if (ev.master.pattern + 16 == ev.fast.pattern) {
-                        cout << "\tmaster +16 bug..." << endl;
+                        //cout << "\tmaster +16 bug..." << endl;
                         offsets++;
                         master_offsets++;
                         events.push_back(ev);
@@ -235,6 +231,11 @@ int main(int argc, char **argv) {
                     }
                     offsets = 0;
                 }
+
+                cout << "Discontinuity found - master_file: " << ev.master.file << " master_index:" << ev.master.index;
+                cout << " fast_file: " << ev.fast.file << " fast_index:" << ev.fast.index << endl;
+                cout << "\tmaster_pattern: " << (ev.master.pattern & 0xFF) << " / " << (ev.master.pattern & test_mask) << " / " << (ev.master.pattern & comp_mask);
+                cout << " fast_pattern: " << (ev.fast.pattern & 0xFF) << " / " << (ev.fast.pattern & test_mask) << " / " << (ev.fast.pattern & comp_mask) << endl;
 
                 if (orphan_retrigger && events.size()) {
                     const uint16_t cmpat = ev.master.pattern;
