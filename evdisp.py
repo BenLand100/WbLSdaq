@@ -359,10 +359,12 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     
     @QtCore.pyqtSlot()
     def load_file(self):
-        self.fname,_ = QtWidgets.QFileDialog.getOpenFileName(self, 'Open file', '.','WbLSdaq HDF5 Files (*.h5)')
-        for view in self.views:
-            view.fname = self.fname
-            view.select_signals()
+        fname,_ = QtWidgets.QFileDialog.getOpenFileName(self, 'Open file', '.','WbLSdaq HDF5 Files (*.h5)')
+        if fname:
+            self.fname = fname
+            for view in self.views:
+                view.fname = self.fname
+                view.select_signals()
         
     @QtCore.pyqtSlot()
     def plot_selected(self):
