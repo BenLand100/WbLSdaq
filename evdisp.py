@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import h5py
+import pickle
 
 import numpy as np
 
@@ -72,7 +73,7 @@ class SignalSelector(QtWidgets.QDialog):
             path,it = it_stack.pop()
             for i in range(it.childCount()):
                 item = it.child(i)
-                name = item.text(0)
+                name = str(item.text(0))
                 fullpath = path+(name,)
                 if item.childCount() > 0 and item.checkState(0) != QtCore.Qt.Unchecked:
                     it_stack.append((fullpath,item))
@@ -106,19 +107,20 @@ class SignalSelector(QtWidgets.QDialog):
                         for grdat in grch:
                             if 'ch' in grdat or 'tr' == grdat:
                                 ch = grch[grdat]
+                                print(previous_selection,(str(dname),str(gcname),str(grdat)))
                                 if previous_selection:
-                                    checked = (dname,gcname,grdat) in previous_selection
+                                    checked = (str(dname),str(gcname),str(grdat)) in previous_selection
                                 else:
-                                    checked = True
+                                    checked = False
                                 self.add_element(grdat,parent=gelem,is_leaf=True,checked=checked)
                             else:
                                 #self.add_element(grch[grdat])
                                 pass
                     elif 'ch' in gcname:
                         if previous_selection:
-                            checked = (dname,gcname) in previous_selection
+                            checked = (str(dname),str(gcname)) in previous_selection
                         else:
-                            checked = True
+                            checked = False
                         self.add_element(gcname,parent=dgelem,is_leaf=True,checked=checked)
         self._layout.addWidget(self._tree)
         
@@ -224,7 +226,12 @@ class SignalView(QtWidgets.QWidget):
             ylim = ax.get_ylim()
         ax.clear()
         
-        if self.selected and self.times and self.data:
+        if self.selected:
+            if self.fname and (not self.times or not self.data):
+                self._load_data()
+            
+            if not self.times or not self.data:
+                return
         
             for t,v,n in zip(self.times,self.raw_data if self.raw_adc else self.data,self.selected):
                 if self.idx < 0 or self.idx >= len(v):
@@ -265,6 +272,16 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         button.setToolTip('Change the plot grid shape')
         button.clicked.connect(self.reshape_prompt)
         
+        button = QtWidgets.QPushButton('Load Layout')
+        button_layout.addWidget(button)
+        button.setToolTip('Save plot layout and selected signals')
+        button.clicked.connect(self.load_layout)
+        
+        button = QtWidgets.QPushButton('Save Layout')
+        button_layout.addWidget(button)
+        button.setToolTip('Load plot layout and selected signals')
+        button.clicked.connect(self.save_layout)
+        
         layout.addLayout(button_layout)
         
         self.grid = QtWidgets.QGridLayout()
@@ -293,10 +310,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         self.txtidx.setText(str(self.idx))
         self.plot_selected()
-    
-    def _load_data(self):
-        self.view.load_data(self.fname)
-        
         
     @QtCore.pyqtSlot()
     def reshape_prompt(self):
@@ -338,6 +351,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         for widget in self.views[self.rows*self.cols:]:
             widget.deleteLater() #how necessary is this, i wonder
         self.views = self.views[:self.rows*self.cols]
+        self.plot_selected()
     
     @QtCore.pyqtSlot()
     def backward(self):
@@ -357,14 +371,48 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.txtidx.setText(str(self.idx))
         self.plot_selected()
     
+    
+    @QtCore.pyqtSlot()
+    def load_layout(self):
+        fname,_ = QtWidgets.QFileDialog.getOpenFileName(self, 'Open settings', '.','WbLSdaq Plot Layouts (*.ply);;All files (*.*)')
+        if fname:
+            try:
+                with open(fname,'rb') as f:            
+                    settings = pickle.load(f)
+                rows = settings['rows']
+                cols = settings['cols']
+                views = [SignalView() for i in range(rows*cols)]
+                for view,(raw_adc,selected) in zip(views,settings['views']):
+                    view.fname = self.fname
+                    view.idx = self.idx
+                    view.raw_adc = raw_adc
+                    view.selected = selected               
+                self.views = views
+                self.reshape(rows,cols)
+            except:
+                print('Could not load settings')
+    
+    @QtCore.pyqtSlot()
+    def save_layout(self):
+        fname,_ = QtWidgets.QFileDialog.getSaveFileName(self, 'Save settings', '.','WbLSdaq Plot Layouts (*.ply);;All files (*.*)')
+        if fname:
+            if not fname.endswith('.ply'):
+                fname = fname + '.ply'
+            settings = {'rows':self.rows,'cols':self.cols}
+            settings['views'] = [(v.raw_adc,v.selected) for v in self.views]
+            with open(fname,'wb') as f:
+                pickle.dump(settings,f)
+    
     @QtCore.pyqtSlot()
     def load_file(self):
-        fname,_ = QtWidgets.QFileDialog.getOpenFileName(self, 'Open file', '.','WbLSdaq HDF5 Files (*.h5)')
+        fname,_ = QtWidgets.QFileDialog.getOpenFileName(self, 'Open data', '.','WbLSdaq HDF5 Files (*.h5);;All files (*.*)')
         if fname:
             self.fname = fname
             for view in self.views:
                 view.fname = self.fname
-                view.select_signals()
+                if view.selected is None:
+                    view.select_signals()
+        self.plot_selected()
         
     @QtCore.pyqtSlot()
     def plot_selected(self):
