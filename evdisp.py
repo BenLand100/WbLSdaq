@@ -27,7 +27,7 @@ class CustomNavToolbar(NavigationToolbar):
         (None, None, None, None),
         ('Pan', 'Pan axes with left mouse, zoom with right', 'move', 'pan'),
         ('Zoom', 'Zoom to rectangle', 'zoom_to_rect', 'zoom'),
-        #('Subplots', 'Configure subplots', 'subplots', 'configure_subplots'),
+        ('Subplots', 'Configure subplots', 'subplots', 'configure_subplots'),
         (None, None, None, None),
         ('Save', 'Save the figure', 'filesave', 'save_figure')
     )
@@ -46,21 +46,53 @@ class CustomNavToolbar(NavigationToolbar):
 from matplotlib.figure import Figure
 
 class SignalSelector(QtWidgets.QDialog):
-    def __init__(self,fname,parent=None,selected=None,raw_adc=False):
+    def __init__(self,fname,parent=None,selected=None,raw_adc=False,pedestal=None,distribute=None):
         super().__init__(parent)
         
         self._layout = QtWidgets.QVBoxLayout(self)
         
         self.set_file(fname,selected)
         
-        self.raw_checkbox = QtWidgets.QCheckBox('Plot ADC counts')
+        self.raw_checkbox = QtWidgets.QCheckBox('Plot raw ADC counts')
         self.raw_checkbox.setCheckState(QtCore.Qt.Checked if raw_adc else QtCore.Qt.Unchecked)
         self._layout.addWidget(self.raw_checkbox)
         
-        buttons = QtWidgets.QDialogButtonBox( QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, QtCore.Qt.Horizontal, self)
+        redist_layout = QtWidgets.QHBoxLayout()
+        self.redist_checkbox = QtWidgets.QCheckBox('Redistribute signals')
+        self.redist_checkbox.setCheckState(QtCore.Qt.Checked if distribute else QtCore.Qt.Unchecked)
+        redist_layout.addWidget(self.redist_checkbox)
+        self.redist_amount = QtWidgets.QLineEdit('0' if distribute is None else str(distribute))
+        redist_layout.addWidget(self.redist_amount)
+        self._layout.addLayout(redist_layout)
+        
+        ped_layout = QtWidgets.QHBoxLayout()
+        self.baseline_checkbox = QtWidgets.QCheckBox('Correct baselines')
+        self.baseline_checkbox.setCheckState(QtCore.Qt.Checked if pedestal else QtCore.Qt.Unchecked)
+        ped_layout.addWidget(self.baseline_checkbox)
+        self.ped_min = QtWidgets.QLineEdit('0' if pedestal is None else str(pedestal[0]))
+        self.ped_min.setFixedWidth(100)
+        ped_layout.addWidget(self.ped_min)
+        self.ped_max = QtWidgets.QLineEdit('50' if pedestal is None else str(pedestal[1]))
+        self.ped_max.setFixedWidth(100)
+        ped_layout.addWidget(self.ped_max)
+        self._layout.addLayout(ped_layout)
+        
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, QtCore.Qt.Horizontal, self)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         self._layout.addWidget(buttons)
+        
+    def get_distribute(self):
+        if self.redist_checkbox.checkState() == QtCore.Qt.Checked:
+            return float(self.redist_amount.text())
+        else:
+            return None
+        
+    def get_pedestal(self):
+        if self.baseline_checkbox.checkState() == QtCore.Qt.Checked:
+            return float(self.ped_min.text()),float(self.ped_max.text())
+        else:
+            return None
         
     def get_raw_adc(self):
         return self.raw_checkbox.checkState() == QtCore.Qt.Checked
@@ -107,7 +139,6 @@ class SignalSelector(QtWidgets.QDialog):
                         for grdat in grch:
                             if 'ch' in grdat or 'tr' == grdat:
                                 ch = grch[grdat]
-                                print(previous_selection,(str(dname),str(gcname),str(grdat)))
                                 if previous_selection:
                                     checked = (str(dname),str(gcname),str(grdat)) in previous_selection
                                 else:
@@ -144,6 +175,8 @@ class SignalView(QtWidgets.QWidget):
         self.fname = None
         self.idx = 0
         self.raw_adc = False
+        self.pedestal = None
+        self.distribute = None
         #self.fig_canvas.installEventFilter(self)
         
         self.times,self.data,self.raw_data,self.selected = None,None,None,None
@@ -173,7 +206,7 @@ class SignalView(QtWidgets.QWidget):
         self.data = []
         self.raw_data = []
         with h5py.File(self.fname,'r') as hf:
-            for dgzt,*grch in self.selected:
+            for sig_idx,(dgzt,*grch) in enumerate(self.selected):
 
                 dgzt = hf[dgzt]
                 channel = dgzt
@@ -204,17 +237,27 @@ class SignalView(QtWidgets.QWidget):
                 
                 samples = channel['samples'][:] #raw ADC values
                 self.raw_data.append(samples)
-                samples = Vpp*(samples/2.0**bits)-offset #now in Volts
+                samples = 1000*Vpp*(samples/2.0**bits)-offset #now in mV
+                if self.pedestal is not None:
+                    ped_min,ped_max = self.pedestal
+                    i = np.argwhere(ped_min >= time)[0,0]
+                    j = np.argwhere(ped_max <= time)[0,0]
+                    pedestals = np.mean(samples[:,i:j],axis=1)
+                    samples = (samples.T - pedestals).T
+                if self.distribute is not None:
+                    samples = samples + sig_idx*self.distribute
                 self.data.append(samples)
         
     def select_signals(self):
         if self.fname is None:
             self.times,self.data,self.raw_data,self.selected = None,None,None,None
             return
-        selector = SignalSelector(self.fname, parent=self, selected=self.selected, raw_adc=self.raw_adc)
+        selector = SignalSelector(self.fname, parent=self, selected=self.selected, raw_adc=self.raw_adc, pedestal=self.pedestal, distribute=self.distribute)
         result = selector.exec_()
         self.selected = selector.get_selected()
         self.raw_adc = selector.get_raw_adc()
+        self.pedestal = selector.get_pedestal()
+        self.distribute = selector.get_distribute()
         self._load_data()
         self.plot_signals()
         
@@ -240,7 +283,7 @@ class SignalView(QtWidgets.QWidget):
                 ax.plot(t,v[self.idx],linestyle='steps',label=label)
                         
         ax.set_xlabel('Sample (ns)')
-        ax.set_ylabel('ADC Counts' if self.raw_adc else 'Voltage (V)')
+        ax.set_ylabel('ADC Counts' if self.raw_adc else ('Voltage (mV)' if not self.distribute else 'Arb. Shifted Voltage (mV)'))
         if not autoscale:
             ax.set_autoscale_on(False)
             ax.set_xlim(*xlim)
@@ -371,7 +414,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.txtidx.setText(str(self.idx))
         self.plot_selected()
     
-    
     @QtCore.pyqtSlot()
     def load_layout(self):
         fname,_ = QtWidgets.QFileDialog.getOpenFileName(self, 'Open settings', '.','WbLSdaq Plot Layouts (*.ply);;All files (*.*)')
@@ -382,11 +424,13 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 rows = settings['rows']
                 cols = settings['cols']
                 views = [SignalView() for i in range(rows*cols)]
-                for view,(raw_adc,selected) in zip(views,settings['views']):
+                for view,(raw_adc,selected,pedestal,distribute) in zip(views,settings['views']):
                     view.fname = self.fname
                     view.idx = self.idx
                     view.raw_adc = raw_adc
-                    view.selected = selected               
+                    view.selected = selected   
+                    view.pedestal = pedestal  
+                    view.distribute = distribute          
                 self.views = views
                 self.reshape(rows,cols)
             except:
@@ -399,7 +443,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             if not fname.endswith('.ply'):
                 fname = fname + '.ply'
             settings = {'rows':self.rows,'cols':self.cols}
-            settings['views'] = [(v.raw_adc,v.selected) for v in self.views]
+            settings['views'] = [(v.raw_adc,v.selected,v.pedestal,v.distribute) for v in self.views]
             with open(fname,'wb') as f:
                 pickle.dump(settings,f)
     
