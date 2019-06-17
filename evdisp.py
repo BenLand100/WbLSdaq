@@ -3,10 +3,10 @@
 import os
 import sys
 import time
-import h5py
 import pickle
-
+import argparse
 import numpy as np
+import h5py
 
 from matplotlib.backends.qt_compat import QtCore, QtWidgets, QtGui, is_pyqt5
 
@@ -21,6 +21,7 @@ class CustomNavToolbar(NavigationToolbar):
     NavigationToolbar.toolitems = (
         ('Signals','Choose signal traces to show', 'choose', 'choose'),
         ('Autoscale', 'Autoscale axes for each new event', 'autoscale','autoscale'),
+        ('Legend', 'Toggle legend', 'legend','legend'),
         ('Home', 'Reset original view', 'home', 'home'),
         ('Back', 'Back to previous view', 'back', 'back'),
         ('Forward', 'Forward to next view', 'forward', 'forward'),
@@ -38,6 +39,10 @@ class CustomNavToolbar(NavigationToolbar):
         
     def choose(self):
         self.parent.select_signals()
+        
+    def legend(self):
+        self.parent.legend = not self.parent.legend
+        self.parent.plot_signals()
         
     def autoscale(self):
         self.parent.fig_ax.set_autoscale_on(True)
@@ -173,19 +178,13 @@ class SignalView(QtWidgets.QWidget):
         self.toolbar_shown(False)
         
         self.fname = None
+        self.legend = False
         self.idx = 0
         self.raw_adc = False
         self.pedestal = None
         self.distribute = None
-        #self.fig_canvas.installEventFilter(self)
         
         self.times,self.data,self.raw_data,self.selected = None,None,None,None
-        
-    #def eventFilter(self, obj, event):
-    #    if event.type() == QtCore.QEvent.MouseButtonPress:
-    #        if event.button() == QtCore.Qt.RightButton:
-    #            self.select_signals()
-    #    return QtCore.QObject.event(obj, event)
         
     def focusInEvent(self, *args, **kwargs):
         super().focusInEvent(*args, **kwargs)
@@ -288,15 +287,17 @@ class SignalView(QtWidgets.QWidget):
             ax.set_autoscale_on(False)
             ax.set_xlim(*xlim)
             ax.set_ylim(*ylim)
+        if self.legend:
+            ax.legend()
             
         ax.figure.canvas.draw()
         
 
-class ApplicationWindow(QtWidgets.QMainWindow):
-    def __init__(self):
+class EvDisp(QtWidgets.QMainWindow):
+    def __init__(self,rows=1,cols=1,fname=None,evidx=0):
         super().__init__()
         
-        self.fname,self.idx = None,0
+        self.fname,self.idx = fname,evidx
         
         self._main = QtWidgets.QWidget()
         self._main.setFocusPolicy(QtCore.Qt.StrongFocus)
@@ -329,7 +330,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         self.grid = QtWidgets.QGridLayout()
         self.views = []
-        self.reshape(1,1)
+        self.reshape(rows,cols)
         layout.addLayout(self.grid)
         
         nav_layout = QtWidgets.QHBoxLayout()
@@ -352,6 +353,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         layout.addLayout(nav_layout)
         
         self.txtidx.setText(str(self.idx))
+        self._load_file(fname)
         self.plot_selected()
         
     @QtCore.pyqtSlot()
@@ -450,6 +452,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot()
     def load_file(self):
         fname,_ = QtWidgets.QFileDialog.getOpenFileName(self, 'Open data', '.','WbLSdaq HDF5 Files (*.h5);;All files (*.*)')
+        self._load_file(fname)
+        
+    def _load_file(self,fname):
         if fname:
             self.fname = fname
             for view in self.views:
@@ -466,7 +471,15 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
 
 if __name__ == "__main__":
-    qapp = QtWidgets.QApplication(sys.argv)
-    app = ApplicationWindow()
+    parser = argparse.ArgumentParser(description='Visually display data from WbLSdaq')
+    parser.add_argument('fname',default=None,nargs='?',help='A data file to open initially')
+    parser.add_argument('evidx',default=0,type=int,nargs='?',help='The index of the event to display first')
+    parser.add_argument('--rows','-r',default=1,type=int,help='Rows of plots [1]')
+    parser.add_argument('--cols','-c',default=1,type=int,help='Columns of plots [1]')
+    args = parser.parse_args()
+    
+    
+    qapp = QtWidgets.QApplication([])
+    app = EvDisp(**vars(args))
     app.show()
     qapp.exec_()
