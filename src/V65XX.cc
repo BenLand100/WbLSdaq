@@ -297,6 +297,7 @@ int V65XX::setHV(int a_channel, float a_voltage) {
     if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
     //N.B. by convention the HVInterface class uses POSTIIVE numbers to represent NEGATIVE voltages 
     setVSet(hvinterface_map[a_channel],-a_voltage);
+    return 0;
 }
 
 ///used to get the high voltage set point in volts
@@ -335,6 +336,7 @@ int V65XX::setRamp(int a_channel,float a_ramp) {
     if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
     setUpRate(hvinterface_map[a_channel],a_ramp);
     setDownRate(hvinterface_map[a_channel],a_ramp);
+    return 0;
 }
 
 ///used to get the ramp in V/s
@@ -349,7 +351,9 @@ int V65XX::powerOn(int a_channel = -1) {
     } else { 
         if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
         setEnabled(hvinterface_map[a_channel],true);
+        return 0;
     }
+    return 1;
 }
 
 ///used to power on channels if -1 is sent all channels will be powered on
@@ -358,7 +362,9 @@ int V65XX::powerOff(int a_channel = -1) {
     } else { 
         if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
         setEnabled(hvinterface_map[a_channel],false);
+        return 0;
     }
+    return 1;
 }
 
 ///used to check whether a channel is on or off
