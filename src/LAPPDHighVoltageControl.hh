@@ -4,7 +4,7 @@
 #include <iostream>
 #include <vector> 
 using std::vector;
-#include "HVInterface.h"
+#include "HVInterface.hh"
 
 class LAPPDHighVoltageControl
 {

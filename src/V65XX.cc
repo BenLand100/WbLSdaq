@@ -21,7 +21,7 @@
 #include <iostream>
 
 #include "V65XX.hh"
-#include "LAPPDHighVoltageControl.h"
+#include "LAPPDHighVoltageControl.hh"
 
 using namespace std;
 
@@ -66,7 +66,7 @@ void V65XX::set(RunTable &config) {
         
         bool enabled = conf["enabled"].cast<bool>();
         
-        LAPPDHighVoltageControl lappd(this);
+        LAPPDHighVoltageControl lappd(this,true);
         
         if (enabled) {
             lappd.setExitGapVoltage(gapl);
@@ -301,6 +301,18 @@ int V65XX::setHV(int a_channel, float a_voltage) {
     return 0;
 }
 
+///These CAEN supplies are accurate enough that attempts to tune are usually worse, so simply call setHV here
+int V65XX::setHVExact(int    a_channel,
+                         float  a_voltage,
+                         float  v_tol,
+                         double P,
+                         double I,
+                         int    min_steps,
+                         int    max_steps
+                        ) {
+    return setHV(a_channel,a_voltage);
+}
+
 ///used to get the high voltage set point in volts
 float V65XX::getHV(int a_channel) {
     if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
@@ -311,7 +323,8 @@ float V65XX::getHV(int a_channel) {
 ///used for reading the applied high voltage in volts
 float V65XX::getMeasuredHV(int a_channel) {
     if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
-    return getV(hvinterface_map[a_channel]);
+    //N.B. by convention the HVInterface class uses POSTIIVE numbers to represent NEGATIVE voltages
+    return -getV(hvinterface_map[a_channel]);
 }
 
 ///used to set the current limit in milliamps
@@ -350,6 +363,7 @@ float V65XX::getRamp(int a_channel) {
 ///used to power on channels if -1 is sent all channels will be powered on
 int V65XX::powerOn(int a_channel) {
     if (a_channel == -1) {
+        throw runtime_error("All channel control not implemented!");
     } else { 
         if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
         setEnabled(hvinterface_map[a_channel],true);
@@ -361,6 +375,7 @@ int V65XX::powerOn(int a_channel) {
 ///used to power on channels if -1 is sent all channels will be powered on
 int V65XX::powerOff(int a_channel) {
     if (a_channel == -1) {
+        throw runtime_error("All channel control not implemented!");
     } else { 
         if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
         setEnabled(hvinterface_map[a_channel],false);

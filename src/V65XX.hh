@@ -19,7 +19,7 @@
 
 #include "VMECard.hh"
 #include "RunDB.hh"
-#include "HVInterface.h"
+#include "HVInterface.hh"
 
 #ifndef V6533__hh
 #define V6533__hh
@@ -129,6 +129,15 @@ class V65XX : public VMECard, virtual public HVInterface {
         
         ///used to set the high voltage set point in volts
         int setHV(int a_channel, float a_voltage);
+        ///these CAEN cards are well calibrated, so this is reimplemented to simply call setHV
+        virtual int setHVExact(int    a_channel,
+                               float  a_voltage,
+                               float  v_tol=3,
+                               double P=0.9,
+                               double I=0.05,
+                               int    min_steps=3,
+                               int    max_steps=30
+                              );
         ///used to get the high voltage set point in volts
         float getHV(int a_channel);
         ///used for reading the applied high voltage in volts

@@ -1,4 +1,4 @@
-#include "LAPPDHighVoltageControl.h"
+#include "LAPPDHighVoltageControl.hh"
 
 #include <thread>
 #include <chrono>
@@ -7,8 +7,8 @@ LAPPDHighVoltageControl::LAPPDHighVoltageControl(HVInterface* a_interface, bool 
 :
 m_voltageController(a_interface),
 m_relativeVoltages(5,0),
-m_isPowered(false),
-m_initialized(false)
+m_initialized(false),
+m_isPowered(false)
 {
   setDefaultVoltages();
   if (auto_init && !syncFromHWState()) gotoSafeHWState();
@@ -97,7 +97,6 @@ int LAPPDHighVoltageControl::powerOff()
   }
   if(m_isPowered)
   {
-    double volts =0;
     for(int iC = 4; iC >=0; iC--)
     {
       m_voltageController->powerOff(iC);
@@ -146,7 +145,7 @@ int LAPPDHighVoltageControl::setExitGapVoltage(double a_volts)
   {
     m_relativeVoltages[0] = a_volts;
   }
-  updateVoltage();
+  return updateVoltage();
 }
 ///set the voltage between the exit of the entry mcp and 
 ///the entry of the exit mcp
@@ -157,7 +156,7 @@ int LAPPDHighVoltageControl::setEntryGapVoltage(double a_volts)
   {
     m_relativeVoltages[2] = a_volts;
   }
-  updateVoltage();
+  return updateVoltage();
 }
 ///sets the voltage for both gaps
 ///If power is on changes will be adopted immediately
@@ -168,7 +167,7 @@ int LAPPDHighVoltageControl::setGapVoltages(double a_volts)
     m_relativeVoltages[0] = a_volts;
     m_relativeVoltages[2] = a_volts;
   }
-  updateVoltage();
+  return updateVoltage();
 }
 ///set the voltage across the exit mcp
 ///If power is on changes will be adopted immediately
@@ -178,7 +177,7 @@ int LAPPDHighVoltageControl::setExitMCPVoltage(double a_volts)
   {
     m_relativeVoltages[1] = a_volts;
   }
-  updateVoltage();
+  return updateVoltage();
 }
 ///set the voltage across the entry mcp
 ///If power is on changes will be adopted immediately
@@ -188,7 +187,7 @@ int LAPPDHighVoltageControl::setEntryMCPVoltage(double a_volts)
   {
     m_relativeVoltages[3] = a_volts;
   }
-  updateVoltage();
+  return updateVoltage();
 }
 ///set the voltage for both mcps
 ///If power is on changes will be adopted immediately
@@ -200,7 +199,7 @@ int LAPPDHighVoltageControl::setMCPVoltages(double a_volts)
     m_relativeVoltages[3] = a_volts;
 
   }
-  updateVoltage();
+  return updateVoltage();
 }
 ///set the voltage for the photocathod 
 ///If power is on changes will be adopted immediately
@@ -210,7 +209,7 @@ int LAPPDHighVoltageControl::setPhotocathodeVoltage(double a_volts)
   {
     m_relativeVoltages[4] = a_volts;
   }
-  updateVoltage();
+  return updateVoltage();
 }
 ///returns the currents or the power supplies vector has the form
 ///exitGapI exitMCPI entryGapI entryMCPI photoCathodeI
@@ -252,11 +251,12 @@ int LAPPDHighVoltageControl::updateVoltage(bool a_initialPowerOn)
       else if(a_initialPowerOn)
       {
         //std::cout << "Refining voltage on ch" << iC << std::endl;
+        int ret = 0;
         for(int iC2 = iC+1; iC2 < 5; iC2++)
         {
-          auto ret = m_voltageController->setHV(iC,volts);
+          ret |= m_voltageController->setHV(iC,volts);
         }
-        auto ret = m_voltageController->setHVExact(iC,volts);
+        ret |= m_voltageController->setHVExact(iC,volts);
         if (ret)
         {
           std::cerr << "Not able to set a HV exactly" << std::endl;

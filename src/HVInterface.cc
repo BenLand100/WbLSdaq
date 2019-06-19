@@ -1,4 +1,4 @@
-#include "HVInterface.h"
+#include "HVInterface.hh"
 
 #include <algorithm>
 #include <sstream>
@@ -94,7 +94,9 @@ int HVInterface::setHVExact(int a_channel, float a_voltage, float v_tol, double 
       std::cout << " seconds so far on channel " << a_channel;
       std::cout << "  volts =  " << a_voltage;
       std::cout << std::endl;
+      loopCount++;
     } while(isRamping(a_channel));
+    std::this_thread::sleep_for(std::chrono::seconds(3));
     // int goodTime = 0;
     // float last = getMeasuredHV(a_channel);
     // for (int i = 0; i < max_steps; i++) 
@@ -131,7 +133,7 @@ void HVInterface::calibrate(int ch, bool danger)
   setRamp(ch,0); //assume this means max speed
   powerOn(ch);
 
-  for (int vi = 0; vi < npts; vi++) {
+  for (size_t vi = 0; vi < npts; vi++) {
     setHV(ch,v_test[vi]);
     std::this_thread::sleep_for(std::chrono::seconds(2));
     float last = getMeasuredHV(ch);

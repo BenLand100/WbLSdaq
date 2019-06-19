@@ -13,8 +13,17 @@ using namespace std;
 using namespace H5;
 
 // Extracts patterns dataset from a group in an hdf5 file, stores in patterns argument
-void getPatterns(H5File &file, const string &gname, vector<uint16_t> &patterns) {
-    Group group = file.openGroup(gname);
+// gpattern can contain %i to try all integers 0-32, using the first valid group as the pattern source.
+void getPatterns(H5File &file, const string &gpattern, vector<uint16_t> &patterns) {
+    Group group;
+    char *gname = new char[gpattern.length()+5];
+    for (int i = 0; i < 32; i++) {
+        sprintf(gname,gpattern.c_str(),i);
+        if (H5Lexists(file.getId(), gname, H5P_DEFAULT)) {
+            group = file.openGroup(gname);
+            break;
+        }
+    }
     DataSet dataset = group.openDataSet("patterns");
 
     hsize_t dims[1];
@@ -64,9 +73,9 @@ int main(int argc, char **argv) {
     // If the magnitude is greater than this assume the count rolled over
     size_t max_offset = 8;
     // Group to read master patterns from
-    string master_group = "/master/ch0/";
+    string master_group = "/master/ch%i/";
     // Group to read fast patterns from
-    string fast_group = "/fast/gr0/";
+    string fast_group = "/fast/gr%i/";
     // Start index
     int startidx = -1;
     // End index
