@@ -40,6 +40,46 @@ V65XX::~V65XX() {
 
 void V65XX::set(RunTable &config) {
 
+    if (config.isMember("lappd")) { 
+        //a card can control a SINGLE lappd
+        //this could potentially be broken out into a different class
+        //but I wanted to ensure that channels aren't configured twice
+        json::Value &conf = config[field];
+        
+        hvinterface_map.clear();
+        
+        //The LAPPDHighVoltage class assumes the HVInterface channels are 0-4 
+        //this maps between HVInterface channels and the actual channels being 
+        //used since they need not be the same.
+        hvinterface_map[0] = conf["mcp_lower_bottom_channel"].cast<int>();
+        hvinterface_map[1] = conf["mcp_lower_top_channel"].cast<int>();
+        hvinterface_map[2] = conf["mcp_upper_bottom_channel"].cast<int>();
+        hvinterface_map[3] = conf["mcp_upper_top_channel"].cast<int>();
+        hvinterface_map[4] = conf["photocathode_channel"].cast<int>();
+        
+        double pc = conf["photocathode_bias"].cast<double>();
+        double mcpu = conf["mcp_upper_bias"].cast<double>();
+        double gapu = conf["gap_upper_bias"].cast<double>();
+        double mcpl = conf["mcp_lower_bias"].cast<double>();
+        double gapl = conf["gap_lower_bias"].cast<double>();
+        
+        bool enabled = conf["enabled"].cast<bool>();
+        
+        LAPPDHighVoltageControl lappd(this);
+        
+        if (enabled) {
+            lappd.setExitGapVoltage(gapl);
+            lappd.setExitMCPVoltage(mcpl);
+            lappd.setEntryGapVoltage(gapu);
+            lappd.setEntryMCPVoltage(mcpu);
+            lappd.setPhotocathodeVoltage(pc);
+            lappd.powerOn();
+        } else {
+            lappd.powerOff();
+        }
+       
+    }
+
     for (uint32_t ch = 0; ch < nChans; ch++) {
         string field = "ch"+to_string(ch);
         if (config.isMember(field)) {
@@ -251,3 +291,83 @@ bool V65XX::isBusy(uint32_t ch) {
 bool V65XX::isWarning(uint32_t ch) {
     return getStatus(ch) & (CH_OVERI | CH_OVERV | CH_UNDERV | CH_MAXV | CH_MAXI | CH_TRIP | CH_OVER_POWER | CH_OVER_TEMP);
 }
+
+///used to set the high voltage set point in volts
+int V65XX::setHV(int a_channel, float a_voltage) {
+    if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
+    //N.B. by convention the HVInterface class uses POSTIIVE numbers to represent NEGATIVE voltages 
+    setVSet(hvinterface_map[a_channel],-a_voltage);
+}
+
+///used to get the high voltage set point in volts
+float V65XX::getHV(int a_channel) {
+    if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
+    //N.B. by convention the HVInterface class uses POSTIIVE numbers to represent NEGATIVE voltages 
+    return -getVSet(hvinterface_map[a_channel]);
+}
+
+///used for reading the applied high voltage in volts
+float V65XX::getMeasuredHV(int a_channel) {
+    if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
+    return getV(hvinterface_map[a_channel]);
+}
+
+///used to set the current limit in milliamps
+int V65XX::setCurrent(int a_channel,float a_current) {
+    if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
+    return setIMax(hvinterface_map[a_channel],a_current*1000.0);
+}
+
+///used to get the current limit in milliamps
+float V65XX::getCurrent(int a_channel) {
+    if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
+    return getIMax(hvinterface_map[a_channel])/1000.0;
+}
+
+///used for reading the sourced current in milliamps
+float V65XX::getMeasuredCurrent(int a_channel) {
+    if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
+    return getI(hvinterface_map[a_channel])/1000.0;
+}
+
+///used to set the ramp in V/s
+int V65XX::setRamp(int a_channel,float a_ramp) {
+    if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
+    setUpRate(hvinterface_map[a_channel],a_ramp);
+    setDownRate(hvinterface_map[a_channel],a_ramp);
+}
+
+///used to get the ramp in V/s
+float V65XX::getRamp(int a_channel) {
+    if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
+    return getUpRate(hvinterface_map[a_channel]);
+}
+
+///used to power on channels if -1 is sent all channels will be powered on
+int V65XX::powerOn(int a_channel = -1) {
+    if (a_channel == -1) {
+    } else { 
+        if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
+        setEnabled(hvinterface_map[a_channel],true);
+    }
+}
+
+///used to power on channels if -1 is sent all channels will be powered on
+int V65XX::powerOff(int a_channel = -1) {
+    if (a_channel == -1) {
+    } else { 
+        if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
+        setEnabled(hvinterface_map[a_channel],false);
+    }
+}
+
+///used to check whether a channel is on or off
+bool V65XX::isPowered(int a_channel) {
+    return isOn(hvinterface_map[a_channel]);
+}
+
+///used to check whether a channel is still changing voltage
+bool V65XX::isRamping(int a_channel) {
+    return isBusy(hvinterface_map[a_channel]);
+}
+        

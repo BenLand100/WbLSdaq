@@ -23,7 +23,7 @@
 #ifndef V6533__hh
 #define V6533__hh
 
-class V65XX : public VMECard {
+class V65XX : public VMECard, virtual public HVInterface {
     
     public:
         //board status registers
@@ -123,12 +123,42 @@ class V65XX : public VMECard {
         bool isBusy(uint32_t ch);
         bool isWarning(uint32_t ch);
         
+        //HVInterface methods
+        //N.B. by convention the HVInterface class uses POSTIIVE numbers to represent NEGATIVE voltages 
+        
+        ///used to set the high voltage set point in volts
+        int setHV(int a_channel, float a_voltage);
+        ///used to get the high voltage set point in volts
+        float getHV(int a_channel);
+        ///used for reading the applied high voltage in volts
+        float getMeasuredHV(int a_channel);
+        ///used to set the current limit in milliamps
+        int setCurrent(int a_channel,float a_current);
+        ///used to get the current limit in milliamps
+        float getCurrent(int a_channel);
+        ///used for reading the sourced current in milliamps
+        float getMeasuredCurrent(int a_channel);
+        ///used to set the ramp in V/s
+        int setRamp(int a_channel,float a_ramp);
+        ///used to get the ramp in V/s
+        float getRamp(int a_channel);
+        ///used to power on channels if -1 is sent all channels will be powered on
+        int powerOn(int a_channel = -1);
+        ///used to power on channels if -1 is sent all channels will be powered on
+        int powerOff(int a_channel = -1);
+        ///used to check whether a channel is on or off
+        bool isPowered(int a_channel);
+        ///used to check whether a channel is still changing voltage
+        bool isRamping(int a_channel);
+        
     protected:
     
         uint32_t vmax, imax;
         uint32_t nChans;
         
         std::vector<bool> positive;
+        
+        std::map<int,uint32_t> hvinterface_map;
     
 };
 
