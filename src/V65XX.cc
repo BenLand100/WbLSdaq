@@ -317,7 +317,8 @@ float V65XX::getMeasuredHV(int a_channel) {
 ///used to set the current limit in milliamps
 int V65XX::setCurrent(int a_channel,float a_current) {
     if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
-    return setIMax(hvinterface_map[a_channel],a_current*1000.0);
+    setIMax(hvinterface_map[a_channel],a_current*1000.0);
+    return 0;
 }
 
 ///used to get the current limit in milliamps
@@ -347,7 +348,7 @@ float V65XX::getRamp(int a_channel) {
 }
 
 ///used to power on channels if -1 is sent all channels will be powered on
-int V65XX::powerOn(int a_channel = -1) {
+int V65XX::powerOn(int a_channel) {
     if (a_channel == -1) {
     } else { 
         if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
@@ -358,7 +359,7 @@ int V65XX::powerOn(int a_channel = -1) {
 }
 
 ///used to power on channels if -1 is sent all channels will be powered on
-int V65XX::powerOff(int a_channel = -1) {
+int V65XX::powerOff(int a_channel) {
     if (a_channel == -1) {
     } else { 
         if (!hvinterface_map.count(a_channel)) throw runtime_error("Unmapped HVInterface channel: "+to_string(a_channel));
