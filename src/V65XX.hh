@@ -19,6 +19,7 @@
 
 #include "VMECard.hh"
 #include "RunDB.hh"
+#include "HVInterface.h"
 
 #ifndef V6533__hh
 #define V6533__hh

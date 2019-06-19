@@ -21,6 +21,7 @@
 #include <iostream>
 
 #include "V65XX.hh"
+#include "LAPPDHighVoltageControl.h"
 
 using namespace std;
 
@@ -44,7 +45,7 @@ void V65XX::set(RunTable &config) {
         //a card can control a SINGLE lappd
         //this could potentially be broken out into a different class
         //but I wanted to ensure that channels aren't configured twice
-        json::Value &conf = config[field];
+        json::Value &conf = config["lappd"];
         
         hvinterface_map.clear();
         
