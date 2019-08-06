@@ -1,4 +1,4 @@
-#!/bin/env python3
+#!/usr/bin/env python3
 
 import os
 import sys
@@ -8,7 +8,10 @@ import argparse
 import numpy as np
 import h5py
 
-from matplotlib.backends.qt_compat import QtCore, QtWidgets, QtGui, is_pyqt5
+try:
+    from matplotlib.backends.qt_compat import QtCore, QtWidgets, QtGui, is_pyqt5
+except:
+    from matplotlib.backends.backend_qt4agg import QtCore, QtWidgets, QtGui, is_pyqt5
 
 if is_pyqt5():
     from matplotlib.backends.backend_qt5agg import (
