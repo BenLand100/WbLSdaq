@@ -294,8 +294,9 @@ class SignalView(QtWidgets.QWidget):
         
 
 class EvDisp(QtWidgets.QMainWindow):
-    def __init__(self,rows=1,cols=1,fname=None,evidx=0):
+    def __init__(self,rows=1,cols=1,fname=None,evidx=0,layout=None):
         super().__init__()
+        plot_layout = layout
         
         self.fname,self.idx = fname,evidx
         
@@ -353,6 +354,8 @@ class EvDisp(QtWidgets.QMainWindow):
         layout.addLayout(nav_layout)
         
         self.txtidx.setText(str(self.idx))
+        if plot_layout:
+            self.load_layout(plot_layout)
         self._load_file(fname)
         self.plot_selected()
         
@@ -417,8 +420,9 @@ class EvDisp(QtWidgets.QMainWindow):
         self.plot_selected()
     
     @QtCore.pyqtSlot()
-    def load_layout(self):
-        fname,_ = QtWidgets.QFileDialog.getOpenFileName(self, 'Open settings', '.','WbLSdaq Plot Layouts (*.ply);;All files (*.*)')
+    def load_layout(self,fname=None):
+        if fname is None:
+            fname,_ = QtWidgets.QFileDialog.getOpenFileName(self, 'Open settings', '.','WbLSdaq Plot Layouts (*.ply);;All files (*.*)')
         if fname:
             try:
                 with open(fname,'rb') as f:            
@@ -476,6 +480,7 @@ if __name__ == "__main__":
     parser.add_argument('evidx',default=0,type=int,nargs='?',help='The index of the event to display first')
     parser.add_argument('--rows','-r',default=1,type=int,help='Rows of plots [1]')
     parser.add_argument('--cols','-c',default=1,type=int,help='Columns of plots [1]')
+    parser.add_argument('--layout','-l',default=None,help='Load a saved layout')
     args = parser.parse_args()
     
     
