@@ -10,3 +10,12 @@ WbLSdaq depends on CAEN's VME library and the HDF5 library.
 To build, run `make` in the top directory
 
 To use, ./WbLSdaq settings.json
+
+HDF5 files produced by WbLSdaq may be viewed interactively with evdisp.py
+
+The makefile will build various other QoL utilities for interacting with CAEN
+hardware, such as v1742calib to extract time calibration information, and 
+v1718reset to reset the bridge in case of VME issues.
+
+The included integrator program can be used to find threshold crossings offline
+and integrate regions of traces, producing an intermediate HDF5 file.
