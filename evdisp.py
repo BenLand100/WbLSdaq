@@ -54,7 +54,7 @@ class CustomNavToolbar(NavigationToolbar):
 from matplotlib.figure import Figure
 
 class SignalSelector(QtWidgets.QDialog):
-    def __init__(self,fname,parent=None,selected=None,raw_adc=False,pedestal=None,distribute=None):
+    def __init__(self,fname,parent=None,selected=None,raw_adc=False,raw_time=False,pedestal=None,distribute=None):
         super().__init__(parent)
         
         self._layout = QtWidgets.QVBoxLayout(self)
@@ -64,6 +64,10 @@ class SignalSelector(QtWidgets.QDialog):
         self.raw_checkbox = QtWidgets.QCheckBox('Plot raw ADC counts')
         self.raw_checkbox.setCheckState(QtCore.Qt.Checked if raw_adc else QtCore.Qt.Unchecked)
         self._layout.addWidget(self.raw_checkbox)
+        
+        self.raw_time_checkbox = QtWidgets.QCheckBox('Plot sample index')
+        self.raw_time_checkbox.setCheckState(QtCore.Qt.Checked if raw_time else QtCore.Qt.Unchecked)
+        self._layout.addWidget(self.raw_time_checkbox)
         
         redist_layout = QtWidgets.QHBoxLayout()
         self.redist_checkbox = QtWidgets.QCheckBox('Redistribute signals')
@@ -104,6 +108,9 @@ class SignalSelector(QtWidgets.QDialog):
         
     def get_raw_adc(self):
         return self.raw_checkbox.checkState() == QtCore.Qt.Checked
+        
+    def get_raw_time(self):
+        return self.raw_time_checkbox.checkState() == QtCore.Qt.Checked
     
     def get_selected(self):
         selected = []
@@ -184,10 +191,14 @@ class SignalView(QtWidgets.QWidget):
         self.legend = False
         self.idx = 0
         self.raw_adc = False
+        self.raw_time = False
         self.pedestal = None
         self.distribute = None
+        self.selected = None
         
-        self.times,self.data,self.raw_data,self.selected = None,None,None,None
+        self.save_props = ['legend','selected','raw_adc','raw_time','pedestal','distribute']
+        
+        self.times,self.data,self.raw_data = None,None,None
         
     def focusInEvent(self, *args, **kwargs):
         super().focusInEvent(*args, **kwargs)
@@ -202,6 +213,18 @@ class SignalView(QtWidgets.QWidget):
             self.fig_toolbar.show()
         else:
             self.fig_toolbar.hide()
+            
+    def get_state(self):
+        all_props = self.__dict__
+        return {prop:getattr(self,prop) for prop in self.save_props if prop in all_props}
+            
+        
+    def set_state(self, state):
+        all_props = self.__dict__
+        for prop,val in state.items():
+            if prop in all_props:
+                setattr(self,prop,val)
+        
             
     def _load_data(self):
         self.times = []
@@ -220,7 +243,10 @@ class SignalView(QtWidgets.QWidget):
                     num_samples = dgzt.attrs['samples']
                 else:
                     num_samples = channel.attrs['samples']
-                time = np.arange(0,num_samples*ns_per_sample,ns_per_sample)
+                if self.raw_time:
+                    time = np.arange(0,num_samples)
+                else:            
+                    time = np.arange(0,num_samples*ns_per_sample,ns_per_sample)
                 self.times.append(time)
                 
                 bits = dgzt.attrs['bits'] #digitizer bit depth
@@ -254,10 +280,11 @@ class SignalView(QtWidgets.QWidget):
         if self.fname is None:
             self.times,self.data,self.raw_data,self.selected = None,None,None,None
             return
-        selector = SignalSelector(self.fname, parent=self, selected=self.selected, raw_adc=self.raw_adc, pedestal=self.pedestal, distribute=self.distribute)
+        selector = SignalSelector(self.fname, parent=self, selected=self.selected, raw_adc=self.raw_adc, raw_time=self.raw_time, pedestal=self.pedestal, distribute=self.distribute)
         result = selector.exec_()
         self.selected = selector.get_selected()
         self.raw_adc = selector.get_raw_adc()
+        self.raw_time = selector.get_raw_time()
         self.pedestal = selector.get_pedestal()
         self.distribute = selector.get_distribute()
         self._load_data()
@@ -284,7 +311,7 @@ class SignalView(QtWidgets.QWidget):
                 label = os.path.join('/',*n)
                 ax.plot(t,v[self.idx],linestyle='steps',label=label)
                         
-        ax.set_xlabel('Sample (ns)')
+        ax.set_xlabel('Sample' if self.raw_time else 'Time (ns)')
         ax.set_ylabel('ADC Counts' if self.raw_adc else ('Voltage (mV)' if not self.distribute else 'Arb. Shifted Voltage (mV)'))
         if not autoscale:
             ax.set_autoscale_on(False)
@@ -433,13 +460,17 @@ class EvDisp(QtWidgets.QMainWindow):
                 rows = settings['rows']
                 cols = settings['cols']
                 views = [SignalView() for i in range(rows*cols)]
-                for view,(raw_adc,selected,pedestal,distribute) in zip(views,settings['views']):
+                for view,state in zip(views,settings['views']):
                     view.fname = self.fname
                     view.idx = self.idx
-                    view.raw_adc = raw_adc
-                    view.selected = selected   
-                    view.pedestal = pedestal  
-                    view.distribute = distribute          
+                    if type(state) == tuple: #old format
+                        raw_adc,selected,pedestal,distribute = state
+                        view.raw_adc = raw_adc
+                        view.selected = selected   
+                        view.pedestal = pedestal  
+                        view.distribute = distribute 
+                    else:
+                        view.set_state(state)         
                 self.views = views
                 self.reshape(rows,cols)
             except:
@@ -452,7 +483,7 @@ class EvDisp(QtWidgets.QMainWindow):
             if not fname.endswith('.ply'):
                 fname = fname + '.ply'
             settings = {'rows':self.rows,'cols':self.cols}
-            settings['views'] = [(v.raw_adc,v.selected,v.pedestal,v.distribute) for v in self.views]
+            settings['views'] = [v.get_state() for v in self.views]
             with open(fname,'wb') as f:
                 pickle.dump(settings,f)
     
